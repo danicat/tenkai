@@ -1,0 +1,5 @@
+[[rule]]
+toolName = "run_shell_command"
+decision = "deny"
+priority = 100
+reason = "Forced use of specialized MCP tools for this experiment."

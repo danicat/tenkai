@@ -1,0 +1,15 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 38.60562499999992
+[STARTUP] Recording metric for phase: load_settings duration: 1.949457999999936
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5338339999999562
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.078833999999915
+[STARTUP] Recording metric for phase: load_cli_config duration: 17.208541999999966
+[STARTUP] Recording metric for phase: initialize_app duration: 4.32549999999992
+[STARTUP] Recording metric for phase: authenticate duration: 1.4110000000000582
+[STARTUP] Recording metric for phase: discover_tools duration: 3.5639170000000604
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 24.82966600000009
+Error executing tool edit_code: MCP tool 'edit_code' reported tool error for function call: {"name":"edit_code","args":{"file_path":"main.go","new_content":"import (\n\t\"fmt\"\n\t\"sync\"\n\t\"sync/atomic\"\n\t\"time\"\n)","search_context":"import (\n\t\"fmt\"\n\t\"sync\"\n\t\"time\"\n)"}} with response: [{"functionResponse":{"name":"edit_code","response":{"content":[{"type":"text","text":"No match found for search_context with score >= 0.85.\n\nBest candidate found at line 2 (Score: 67.74%):\n<<<\n\nimport (\n\t\"fmt\"\n\t\"sync\"\n\t\"sync/atomic\"\n>>>\n\nDiff:\n- \n- import (\n- \t\"fmt\"\n- \t\"sync\"\n- \t\"sync/atomic\"\n+ import (\n+ \t\"fmt\"\n+ \t\"sync\"\n+ \t\"time\"\n+ )"}],"isError":true}}}]

@@ -1,0 +1,277 @@
+[
+  {
+    "alternative": "2_go_optimized",
+    "scenario": "go_symbol_listing",
+    "repetition": 1,
+    "duration": 7052864417,
+    "workspace": "/Users/petruzalek/projects/tenkai/experiments/runs/20251218-150832_system_prompt_study/2_go_optimized/go_symbol_listing/rep-1",
+    "stdout": "",
+    "stderr": "YOLO mode is enabled. All tool calls will be automatically approved.\nSession cleanup disabled: Either maxAge or maxCount must be specified\nServer 'godoctor' supports tool updates. Listening for changes...\nServer 'godoctor' supports resource updates. Listening for changes...\n[STARTUP] StartupProfiler.flush() called with 9 phases\n[STARTUP] Recording metric for phase: cli_startup duration: 38.28112500000009\n[STARTUP] Recording metric for phase: load_settings duration: 1.9579579999999623\n[STARTUP] Recording metric for phase: migrate_settings duration: 0.5557499999999891\n[STARTUP] Recording metric for phase: parse_arguments duration: 8.11145799999997\n[STARTUP] Recording metric for phase: load_cli_config duration: 16.63716700000009\n[STARTUP] Recording metric for phase: initialize_app duration: 4.441417000000001\n[STARTUP] Recording metric for phase: authenticate duration: 1.61200000000008\n[STARTUP] Recording metric for phase: discover_tools duration: 3.2649999999999864\n[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 18.01475000000005\n🔔 Received resource update notification from 'godoctor'\n🔔 Received resource update notification from 'godoctor'\nResource refresh for 'godoctor' is already in progress. Pending update.\n[INFO] Resources updated for server: godoctor\n[INFO] Resources updated for server: godoctor\n",
+    "agent_metrics": {
+      "Result": "success",
+      "InputTokens": 21308,
+      "OutputTokens": 177,
+      "TotalTokens": 21639,
+      "ToolCalls": [
+        {
+          "Name": "inspect_file",
+          "Args": "{\"file_path\":\"api/main.go\"}",
+          "Status": "success",
+          "Output": "Registered 2 resources:\n- fmt.Println\n- fmt.Printf",
+          "Error": "",
+          "Duration": 25000000,
+          "Timestamp": "2025-12-18T15:08:36.015Z"
+        },
+        {
+          "Name": "read_file",
+          "Args": "{\"file_path\":\"api/main.go\"}",
+          "Status": "success",
+          "Output": "",
+          "Error": "",
+          "Duration": 9000000,
+          "Timestamp": "2025-12-18T15:08:37.269Z"
+        }
+      ],
+      "Errors": [],
+      "Messages": [
+        {
+          "Timestamp": "2025-12-18T15:08:34.629Z",
+          "Role": "user",
+          "Content": "List all exported functions and types in the `api` package. Use the most efficient tools available for Go codebase analysis.\n\n\n",
+          "Delta": false
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:36.694Z",
+          "Role": "assistant",
+          "Content": "The `inspect_",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:36.73Z",
+          "Role": "assistant",
+          "Content": "file` tool does not list the exported functions and types *within* the specified",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:37.007Z",
+          "Role": "assistant",
+          "Content": " file, but rather lists the *external symbols used by* the file. I need a different approach.\n\nTo list all exported functions and types in the `api` package, I should first understand what's in `api/main.",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:37.152Z",
+          "Role": "assistant",
+          "Content": "go`. I will read the content of `api/main.go` to understand its structure and then determine the exported symbols.",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:39.661Z",
+          "Role": "assistant",
+          "Content": "In the `api` package, the following are exported:\n\n**Types:**\n*   `Data` (struct)\n\n**Functions:**\n*   `GetInfo`\n*   `ProcessData`",
+          "Delta": true
+        }
+      ],
+      "LoopDetected": false
+    },
+    "evaluation_metrics": {
+      "TestsPassed": 0,
+      "TestsFailed": 0,
+      "LintIssues": 2,
+      "LintDetails": {
+        "issue": 2
+      }
+    }
+  },
+  {
+    "alternative": "3_default_godoctor",
+    "scenario": "go_symbol_listing",
+    "repetition": 1,
+    "duration": 8811752416,
+    "workspace": "/Users/petruzalek/projects/tenkai/experiments/runs/20251218-150832_system_prompt_study/3_default_godoctor/go_symbol_listing/rep-1",
+    "stdout": "",
+    "stderr": "YOLO mode is enabled. All tool calls will be automatically approved.\nSession cleanup disabled: Either maxAge or maxCount must be specified\nServer 'godoctor' supports tool updates. Listening for changes...\nServer 'godoctor' supports resource updates. Listening for changes...\n[STARTUP] StartupProfiler.flush() called with 9 phases\n[STARTUP] Recording metric for phase: cli_startup duration: 37.97312499999998\n[STARTUP] Recording metric for phase: load_settings duration: 2.000541000000112\n[STARTUP] Recording metric for phase: migrate_settings duration: 0.5785829999999805\n[STARTUP] Recording metric for phase: parse_arguments duration: 8.60329200000001\n[STARTUP] Recording metric for phase: load_cli_config duration: 15.810915999999906\n[STARTUP] Recording metric for phase: initialize_app duration: 4.418042000000014\n[STARTUP] Recording metric for phase: authenticate duration: 1.672040999999922\n[STARTUP] Recording metric for phase: discover_tools duration: 3.128417000000013\n[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 17.585000000000036\n🔔 Received resource update notification from 'godoctor'\n🔔 Received resource update notification from 'godoctor'\nResource refresh for 'godoctor' is already in progress. Pending update.\n[INFO] Resources updated for server: godoctor\n[INFO] Resources updated for server: godoctor\n",
+    "agent_metrics": {
+      "Result": "success",
+      "InputTokens": 27247,
+      "OutputTokens": 88,
+      "TotalTokens": 27593,
+      "ToolCalls": [
+        {
+          "Name": "inspect_file",
+          "Args": "{\"file_path\":\"api/main.go\"}",
+          "Status": "success",
+          "Output": "Registered 2 resources:\n- fmt.Println\n- fmt.Printf",
+          "Error": "",
+          "Duration": 22000000,
+          "Timestamp": "2025-12-18T15:08:36.302Z"
+        },
+        {
+          "Name": "read_file",
+          "Args": "{\"file_path\":\"api/main.go\"}",
+          "Status": "success",
+          "Output": "",
+          "Error": "",
+          "Duration": 12000000,
+          "Timestamp": "2025-12-18T15:08:38.47Z"
+        }
+      ],
+      "Errors": [],
+      "Messages": [
+        {
+          "Timestamp": "2025-12-18T15:08:34.629Z",
+          "Role": "user",
+          "Content": "List all exported functions and types in the `api` package. Use the most efficient tools available for Go codebase analysis.\n\n\n",
+          "Delta": false
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:41.395Z",
+          "Role": "assistant",
+          "Content": "In the `api` package, the following exported functions and types are available:\n\n**Exported Functions:**\n*   `GetInfo()`\n*   `ProcessData(d Data)`\n\n**Exported Types:**\n*   `Data",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:41.429Z",
+          "Role": "assistant",
+          "Content": "`",
+          "Delta": true
+        }
+      ],
+      "LoopDetected": false
+    },
+    "evaluation_metrics": {
+      "TestsPassed": 0,
+      "TestsFailed": 0,
+      "LintIssues": 2,
+      "LintDetails": {
+        "issue": 2
+      }
+    }
+  },
+  {
+    "alternative": "4_go_godoctor",
+    "scenario": "go_symbol_listing",
+    "repetition": 1,
+    "duration": 10713298042,
+    "workspace": "/Users/petruzalek/projects/tenkai/experiments/runs/20251218-150832_system_prompt_study/4_go_godoctor/go_symbol_listing/rep-1",
+    "stdout": "",
+    "stderr": "YOLO mode is enabled. All tool calls will be automatically approved.\nSession cleanup disabled: Either maxAge or maxCount must be specified\nServer 'godoctor' supports tool updates. Listening for changes...\nServer 'godoctor' supports resource updates. Listening for changes...\n[STARTUP] StartupProfiler.flush() called with 9 phases\n[STARTUP] Recording metric for phase: cli_startup duration: 41.00450000000001\n[STARTUP] Recording metric for phase: load_settings duration: 2.0012499999999136\n[STARTUP] Recording metric for phase: migrate_settings duration: 0.527582999999936\n[STARTUP] Recording metric for phase: parse_arguments duration: 7.888083999999935\n[STARTUP] Recording metric for phase: load_cli_config duration: 16.656667000000084\n[STARTUP] Recording metric for phase: initialize_app duration: 7.099042000000054\n[STARTUP] Recording metric for phase: authenticate duration: 3.9010829999999714\n[STARTUP] Recording metric for phase: discover_tools duration: 4.016832999999906\n[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 21.71266700000001\n🔔 Received resource update notification from 'godoctor'\n🔔 Received resource update notification from 'godoctor'\nResource refresh for 'godoctor' is already in progress. Pending update.\n[INFO] Resources updated for server: godoctor\n[INFO] Resources updated for server: godoctor\n",
+    "agent_metrics": {
+      "Result": "success",
+      "InputTokens": 22659,
+      "OutputTokens": 96,
+      "TotalTokens": 23119,
+      "ToolCalls": [
+        {
+          "Name": "inspect_file",
+          "Args": "{\"file_path\":\"api/main.go\"}",
+          "Status": "success",
+          "Output": "Registered 2 resources:\n- fmt.Println\n- fmt.Printf",
+          "Error": "",
+          "Duration": 29000000,
+          "Timestamp": "2025-12-18T15:08:43.615Z"
+        },
+        {
+          "Name": "run_shell_command",
+          "Args": "{\"command\":\"go doc ./api\",\"description\":\"List all exported functions and types in the api package.\"}",
+          "Status": "success",
+          "Output": "package api // import \"experiment/api\"\n\nfunc GetInfo() string\nfunc ProcessData(d Data) error\ntype Data struct{ ... }",
+          "Error": "",
+          "Duration": 141000000,
+          "Timestamp": "2025-12-18T15:08:46.009Z"
+        }
+      ],
+      "Errors": [],
+      "Messages": [
+        {
+          "Timestamp": "2025-12-18T15:08:41.677Z",
+          "Role": "user",
+          "Content": "List all exported functions and types in the `api` package. Use the most efficient tools available for Go codebase analysis.\n\n\n",
+          "Delta": false
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:50.649Z",
+          "Role": "assistant",
+          "Content": "In the `api` package, the following exported functions and types are available:\n\n- `func GetInfo() string`\n- `func ProcessData(d Data) error`\n- `type Data struct{ ... }`",
+          "Delta": true
+        }
+      ],
+      "LoopDetected": false
+    },
+    "evaluation_metrics": {
+      "TestsPassed": 0,
+      "TestsFailed": 0,
+      "LintIssues": 2,
+      "LintDetails": {
+        "issue": 2
+      }
+    }
+  },
+  {
+    "alternative": "1_default",
+    "scenario": "go_symbol_listing",
+    "repetition": 1,
+    "duration": 23557798208,
+    "workspace": "/Users/petruzalek/projects/tenkai/experiments/runs/20251218-150832_system_prompt_study/1_default/go_symbol_listing/rep-1",
+    "stdout": "",
+    "stderr": "YOLO mode is enabled. All tool calls will be automatically approved.\nSession cleanup disabled: Either maxAge or maxCount must be specified\nServer 'godoctor' supports tool updates. Listening for changes...\nServer 'godoctor' supports resource updates. Listening for changes...\n[STARTUP] StartupProfiler.flush() called with 9 phases\n[STARTUP] Recording metric for phase: cli_startup duration: 39.20474999999999\n[STARTUP] Recording metric for phase: load_settings duration: 2.072708000000034\n[STARTUP] Recording metric for phase: migrate_settings duration: 0.5650000000000546\n[STARTUP] Recording metric for phase: parse_arguments duration: 8.703917000000047\n[STARTUP] Recording metric for phase: load_cli_config duration: 16.66791699999999\n[STARTUP] Recording metric for phase: initialize_app duration: 4.768792000000076\n[STARTUP] Recording metric for phase: authenticate duration: 1.7218330000000606\n[STARTUP] Recording metric for phase: discover_tools duration: 3.3530000000000655\n[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 17.959499999999935\n",
+    "agent_metrics": {
+      "Result": "success",
+      "InputTokens": 27622,
+      "OutputTokens": 563,
+      "TotalTokens": 28989,
+      "ToolCalls": [
+        {
+          "Name": "delegate_to_agent",
+          "Args": "{\"agent_name\":\"codebase_investigator\",\"objective\":\"List all exported functions and types in the `api` package.\"}",
+          "Status": "success",
+          "Output": "\nSubagent codebase_investigator Finished\n\nTermination Reason:\n GOAL\n\nResult:\n{\n  \"SummaryOfFindings\": \"The `api` package is defined in `api/main.go`.\\n\\nExported Types:\\n- `Data`: A struct with fields `ID` (int) and `Name` (string).\\n\\nExported Functions:\\n- `GetInfo()`: Returns a string greeting.\\n- `ProcessData(d Data)`: Takes a `Data` struct and prints its name, returning an error (which is always nil in the current implementation).\\n\\nUnexported symbols (not part of the public API):\\n- `helper`: A function.\\n- `internalConfig`: A struct.\",\n  \"ExplorationTrace\": [\n    \"Listed files in `api` directory and found `main.go`.\",\n    \"Read `api/main.go` to analyze the code.\",\n    \"Identified the package name as `api`.\",\n    \"Parsed the file to find exported symbols (starting with uppercase letters).\",\n    \"Found exported type `Data`.\",\n    \"Found exported functions `GetInfo` and `ProcessData`.\"\n  ],\n  \"RelevantLocations\": [\n    {\n      \"FilePath\": \"api/main.go\",\n      \"Reasoning\": \"This file contains the definition of the `api` package and all its exported symbols.\",\n      \"KeySymbols\": [\n        \"Data\",\n        \"GetInfo\",\n        \"ProcessData\"\n      ]\n    }\n  ]\n}\n",
+          "Error": "",
+          "Duration": 18480000000,
+          "Timestamp": "2025-12-18T15:08:36.745Z"
+        }
+      ],
+      "Errors": [],
+      "Messages": [
+        {
+          "Timestamp": "2025-12-18T15:08:34.629Z",
+          "Role": "user",
+          "Content": "List all exported functions and types in the `api` package. Use the most efficient tools available for Go codebase analysis.\n\n\n",
+          "Delta": false
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:55.835Z",
+          "Role": "assistant",
+          "Content": "The",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:55.836Z",
+          "Role": "assistant",
+          "Content": " `api` package in `api/main.go` exports the following:",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:56.04Z",
+          "Role": "assistant",
+          "Content": "\n\n**Exported Types:**\n*   `Data`: A struct with fields `ID` (int) and `Name` (string).\n\n**Exported Functions:**\n*   `GetInfo()`: Returns a string greeting.\n*   ",
+          "Delta": true
+        },
+        {
+          "Timestamp": "2025-12-18T15:08:56.168Z",
+          "Role": "assistant",
+          "Content": "`ProcessData(d Data)`: Takes a `Data` struct and prints its name, returning an error (which is always nil in the current implementation).",
+          "Delta": true
+        }
+      ],
+      "LoopDetected": false
+    },
+    "evaluation_metrics": {
+      "TestsPassed": 0,
+      "TestsFailed": 0,
+      "LintIssues": 2,
+      "LintDetails": {
+        "issue": 2
+      }
+    }
+  }
+]

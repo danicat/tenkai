@@ -1,0 +1,33 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 35.349917000000005
+[STARTUP] Recording metric for phase: load_settings duration: 2.067542000000003
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5752500000000964
+[STARTUP] Recording metric for phase: parse_arguments duration: 7.95495799999992
+[STARTUP] Recording metric for phase: load_cli_config duration: 14.489582999999925
+[STARTUP] Recording metric for phase: initialize_app duration: 4.331040999999914
+[STARTUP] Recording metric for phase: authenticate duration: 1.5353750000000446
+[STARTUP] Recording metric for phase: discover_tools duration: 3.0135420000000295
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 17.20150000000001
+Error executing tool replace: A secondary check by an LLM determined that no changes were necessary to fulfill the instruction. Explanation: The original search failed because the target import paths (`experiment/internal/api` and `experiment/internal/service`) were already present in the file. The `replace` string's content already matches the current state of the file, so no changes are required.. Original error with the parameters given: Failed to edit, 0 occurrences found for old_string (import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"rep-2/internal/api"
+	"rep-2/internal/service"
+)). Original old_string was (import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"rep-2/internal/api"
+	"rep-2/internal/service"
+)) in /Users/petruzalek/projects/tenkai/experiments/runs/20251217-174107_gemini_go_mcp_flash/gemini_flash_godoctor/legacy_refactor/rep-2/main_test.go. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use read_file tool to verify.

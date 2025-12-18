@@ -1,0 +1,19 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 57.152917
+[STARTUP] Recording metric for phase: load_settings duration: 1.967916999999943
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.6881250000000136
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.935958999999912
+[STARTUP] Recording metric for phase: load_cli_config duration: 21.331457999999998
+[STARTUP] Recording metric for phase: initialize_app duration: 7.572999999999979
+[STARTUP] Recording metric for phase: authenticate duration: 3.272291999999993
+[STARTUP] Recording metric for phase: discover_tools duration: 10.229166999999961
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 30.78083300000003
+missing pgrep output
+missing pgrep output
+missing pgrep output
+missing pgrep output
+Error when talking to Gemini API Full report available at: /var/folders/26/b4fvnqw12wbb4hv429kw8tkc01cckt/T/gemini-client-error-Turn.run-sendMessageStream-2025-12-18T13-03-14-247Z.json

@@ -1,0 +1,20 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 36.19233299999996
+[STARTUP] Recording metric for phase: load_settings duration: 1.8840420000000222
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5291250000000218
+[STARTUP] Recording metric for phase: parse_arguments duration: 7.604208999999969
+[STARTUP] Recording metric for phase: load_cli_config duration: 16.136167
+[STARTUP] Recording metric for phase: initialize_app duration: 4.113499999999931
+[STARTUP] Recording metric for phase: authenticate duration: 1.5034169999998994
+[STARTUP] Recording metric for phase: discover_tools duration: 3.001916999999935
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 17.73625000000004
+Error executing tool edit_code: params must NOT have additional properties
+Error executing tool edit_code: params must NOT have additional properties
+Error executing tool edit_code: params must NOT have additional properties
+Error executing tool edit_code: params must NOT have additional properties
+Error executing tool edit_code: params must NOT have additional properties
+Error executing tool edit_code: params must NOT have additional properties

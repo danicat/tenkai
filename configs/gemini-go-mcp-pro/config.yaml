@@ -1,0 +1,56 @@
+name: "gemini_go_mcp_pro"
+description: "Standardized AB test comparing Vanilla, Go, GoDoctor, and agents using Gemini 2.5 Pro across standard scenarios."
+repetitions: 3
+max_concurrent: 8
+alternatives:
+  - name: "gemini"
+    description: "Control: Standard Gemini 2.5 Pro."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: {}
+
+  - name: "gemini_godoctor"
+    description: "Gemini 2.5 Pro with GoDoctor MCP tools."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: {}
+    settings_path: "examples/settings-godoctor.json"
+
+  - name: "gemini_godoctor_agents"
+    description: "Gemini 2.5 Pro with GoDoctor MCP tools and custom agents.md context."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: {}
+    settings_path: "examples/settings-godoctor.json"
+    context_file_path: "examples/GEMINI.md"
+
+  - name: "gemini_go"
+    description: "Gemini 2.5 Pro with Go system prompt."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: 
+      GEMINI_SYSTEM_MD: "/Users/petruzalek/.gemini/system.golang.md"
+
+  - name: "gemini_go_godoctor"
+    description: "Gemini 2.5 Pro with both Go system prompt and GoDoctor MCP tools."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: 
+      GEMINI_SYSTEM_MD: "/Users/petruzalek/.gemini/system.golang.md"
+    settings_path: "examples/settings-godoctor.json"
+
+  - name: "gemini_go_godoctor_agents"
+    description: "Gemini 2.5 Pro with Go system prompt, GoDoctor MCP tools, and custom agents.md context."
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-pro"]
+    env: 
+      GEMINI_SYSTEM_MD: "/Users/petruzalek/.gemini/system.golang.md"
+    settings_path: "examples/settings-godoctor.json"
+    context_file_path: "examples/GEMINI.md"
+
+scenarios:
+  - name: "greenfield_cli"
+  - name: "legacy_refactor"
+  - name: "concurrency_debug"
+  - name: "test_generation"
+  - name: "api_implementation"

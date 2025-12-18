@@ -1,0 +1,15 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 35.64791700000001
+[STARTUP] Recording metric for phase: load_settings duration: 2.0127919999999904
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5153749999999491
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.457167000000027
+[STARTUP] Recording metric for phase: load_cli_config duration: 14.735749999999939
+[STARTUP] Recording metric for phase: initialize_app duration: 4.158084000000031
+[STARTUP] Recording metric for phase: authenticate duration: 1.4772499999999127
+[STARTUP] Recording metric for phase: discover_tools duration: 2.8239589999999453
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 18.121958000000063
+Error executing tool replace: A secondary check by an LLM determined that no changes were necessary to fulfill the instruction. Explanation: The original search failed because the module name 'bookstore-api' was not found in the file. The file already contains 'module experiment', which is the desired state according to the instruction. Therefore, no changes are required.. Original error with the parameters given: Failed to edit, 0 occurrences found for old_string (module bookstore-api). Original old_string was (module bookstore-api) in /Users/petruzalek/projects/tenkai/experiments/runs/20251217-174107_gemini_go_mcp_flash/gemini_flash_go_godoctor/api_implementation/rep-2/go.mod. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use read_file tool to verify.

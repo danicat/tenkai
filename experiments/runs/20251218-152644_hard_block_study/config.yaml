@@ -1,0 +1,51 @@
+name: "hard_block_study"
+description: >
+  Part 2: Forcing MCP tools by excluding read/write/replace.
+  This experiment tests if hard technical barriers (tool exclusion) can force 
+  tool selection even when the system prompt might lean towards standard tools.
+repetitions: 3
+max_concurrent: 3
+timeout: "5m"
+alternatives:
+  - name: "1_default_blocked"
+    description: >
+      Standard prompt + Forced MCP.
+      Condition: Baseline prompt but with read_file, write_file, and replace disabled.
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-flash"]
+    system_prompt_file: "../system-prompt-study/SYSTEM_DEFAULT.md"
+    settings_path: "settings-force-mcp.json"
+
+  - name: "2_go_optimized_blocked"
+    description: >
+      Go-centric prompt + Forced MCP.
+      Condition: Go-optimized prompt but with read_file, write_file, and replace disabled.
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-flash"]
+    system_prompt_file: "../system-prompt-study/SYSTEM_GO_OPTIMIZED.md"
+    settings_path: "settings-force-mcp.json"
+
+  - name: "3_default_godoctor_blocked"
+    description: >
+      Standard+GoDoctor prompt + Forced MCP.
+      Condition: Prompt aware of godoctor but with standard alternatives disabled.
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-flash"]
+    system_prompt_file: "../system-prompt-study/SYSTEM_DEFAULT_GODOCTOR.md"
+    settings_path: "settings-force-mcp.json"
+
+  - name: "4_go_godoctor_blocked"
+    description: >
+      Go+GoDoctor prompt + Forced MCP.
+      Condition: Most targeted prompt combined with deterministic tool exclusion.
+    command: "gemini"
+    args: ["--output-format", "stream-json", "--yolo", "--model", "gemini-2.5-flash"]
+    system_prompt_file: "../system-prompt-study/SYSTEM_GO_GODOCTOR.md"
+    settings_path: "settings-force-mcp.json"
+
+scenarios:
+  - name: "api_implementation"
+  - name: "concurrency_debug"
+  - name: "greenfield_cli"
+  - name: "legacy_refactor"
+  - name: "test_generation"

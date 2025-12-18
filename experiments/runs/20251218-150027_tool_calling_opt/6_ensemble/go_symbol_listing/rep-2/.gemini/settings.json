@@ -1,0 +1,15 @@
+{
+    "tools": {
+        "exclude": [
+            "run_shell_command"
+        ]
+    },
+    "mcpServers": {
+        "godoctor": {
+            "command": "godoctor",
+            "args": [
+                "--experimental"
+            ]
+        }
+    }
+}

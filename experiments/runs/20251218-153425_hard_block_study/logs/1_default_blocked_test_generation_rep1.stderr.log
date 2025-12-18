@@ -1,0 +1,17 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 37.66737499999999
+[STARTUP] Recording metric for phase: load_settings duration: 2.229249999999979
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.6869170000001077
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.385625000000005
+[STARTUP] Recording metric for phase: load_cli_config duration: 15.552125000000046
+[STARTUP] Recording metric for phase: initialize_app duration: 4.447499999999991
+[STARTUP] Recording metric for phase: authenticate duration: 1.652208000000087
+[STARTUP] Recording metric for phase: discover_tools duration: 3.0962919999999485
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 16.369625000000042
+Error executing tool read_file: Tool "read_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "read_godoc", "inspect_file", "web_fetch"?
+Error executing tool edit_code: MCP tool 'edit_code' reported tool error for function call: {"name":"edit_code","args":{"new_content":"func main() {\n        mux := setupRoutes()\n        log.Println(\"Server starting on :8080\")\n        if err := http.ListenAndServe(\":8080\", mux); err != nil {\n                log.Fatal(err)\n        }\n}\n\n// CalculateTax calculates the tax based on income using predefined brackets.\nfunc CalculateTax(income float64) float64 {\n\tvar tax float64\n\n\tif income <= 10000 {\n\t\ttax = income * 0.10\n\t} else if income <= 30000 {\n\t\t// Bug: Forgets to add the base tax from the first bracket\n\t\ttax = (income - 10000) * 0.20\n\t} else { // income > 30000\n\t\t// Bug: Incorrectly calculates the base tax for the first two brackets\n\t\ttax = (income - 30000) * 0.30\n\t}\n\treturn tax\n}\n","search_context":"func main() {","file_path":"server.go"}} with response: [{"functionResponse":{"name":"edit_code","response":{"content":[{"type":"text","text":"Syntax Error (Pre-commit): 67:2: expected declaration, found mux"}],"isError":true}}}]
+Error executing tool write_file: Tool "write_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "write_todos", "edit_code", "inspect_file"?

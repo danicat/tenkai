@@ -1,0 +1,23 @@
+mode: set
+experiment/server.go:14.63,15.16 1 1
+experiment/server.go:15.16,17.3 1 1
+experiment/server.go:19.2,22.21 2 1
+experiment/server.go:22.21,25.3 2 1
+experiment/server.go:26.2,29.21 2 1
+experiment/server.go:29.21,32.3 2 1
+experiment/server.go:33.2,36.21 2 1
+experiment/server.go:36.21,39.3 2 1
+experiment/server.go:40.2,44.12 3 1
+experiment/server.go:47.59,48.32 1 0
+experiment/server.go:48.32,51.3 2 0
+experiment/server.go:52.2,53.16 2 0
+experiment/server.go:53.16,55.3 1 0
+experiment/server.go:56.2,56.36 1 0
+experiment/server.go:59.58,60.33 1 0
+experiment/server.go:60.33,63.3 2 0
+experiment/server.go:64.2,65.16 2 0
+experiment/server.go:65.16,68.3 2 0
+experiment/server.go:69.2,70.15 2 0
+experiment/server.go:73.35,78.2 4 0
+experiment/server.go:80.13,83.58 3 0
+experiment/server.go:83.58,85.3 1 0

@@ -1,0 +1,19 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 37.519957999999974
+[STARTUP] Recording metric for phase: load_settings duration: 1.9596660000000838
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5389579999999796
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.006500000000074
+[STARTUP] Recording metric for phase: load_cli_config duration: 16.38062500000001
+[STARTUP] Recording metric for phase: initialize_app duration: 4.568791999999917
+[STARTUP] Recording metric for phase: authenticate duration: 1.5715000000000146
+[STARTUP] Recording metric for phase: discover_tools duration: 3.1971249999999145
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 19.35374999999999
+🔔 Received resource update notification from 'godoctor'
+🔔 Received resource update notification from 'godoctor'
+Resource refresh for 'godoctor' is already in progress. Pending update.
+[INFO] Resources updated for server: godoctor
+[INFO] Resources updated for server: godoctor

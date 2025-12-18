@@ -1,0 +1,15 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 36.35112499999991
+[STARTUP] Recording metric for phase: load_settings duration: 2.010832999999934
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5337499999999409
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.21712500000001
+[STARTUP] Recording metric for phase: load_cli_config duration: 15.319458000000054
+[STARTUP] Recording metric for phase: initialize_app duration: 4.296167000000082
+[STARTUP] Recording metric for phase: authenticate duration: 1.4645419999999376
+[STARTUP] Recording metric for phase: discover_tools duration: 3.0616670000000568
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 32.03262499999994
+Error executing tool replace: File path must be within one of the workspace directories: /Users/petruzalek/projects/tenkai/experiments/runs/20251217-180005_context_abtest/control_no_context/concurrency_debug/rep-8

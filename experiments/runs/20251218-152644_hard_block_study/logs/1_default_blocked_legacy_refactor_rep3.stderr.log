@@ -1,0 +1,19 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 36.21266700000001
+[STARTUP] Recording metric for phase: load_settings duration: 1.7856669999999895
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.48812499999996817
+[STARTUP] Recording metric for phase: parse_arguments duration: 7.961166999999932
+[STARTUP] Recording metric for phase: load_cli_config duration: 15.517207999999982
+[STARTUP] Recording metric for phase: initialize_app duration: 4.458375000000046
+[STARTUP] Recording metric for phase: authenticate duration: 1.492083999999977
+[STARTUP] Recording metric for phase: discover_tools duration: 3.1369580000000497
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 26.387333000000012
+Error executing tool read_file: Tool "read_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "read_godoc", "inspect_file", "web_fetch"?
+Error executing tool edit_code: MCP tool 'edit_code' reported tool error for function call: {"name":"edit_code","args":{"file_path":"internal/service/logic.go","new_content":"package service\n\nimport (\n\t\"fmt\"\n\t\"sync\"\n\n\t\"github.com/google/uuid\"\n)\n\n// User represents a user in the system\ntype User struct {\n\tID    string `json:\"id\"`\n\tName  string `json:\"name\"`\n\tEmail string `json:\"email\"`\n}\n\ntype UserService interface {\n\tGetUsers() []User\n\tCreateUser(user User) (User, error)\n\tGetUserByID(id string) (User, bool)\n}\n\ntype userService struct {\n\tusers map[string]User\n\tmutex sync.RWMutex\n}\n\nfunc NewUserService() UserService {\n\treturn &userService{\n\t\tusers: make(map[string]User),\n\t}\n}\n\nfunc (s *userService) GetUsers() []User {\n\ts.mutex.RLock()\n\tdefer s.mutex.RUnlock()\n\tvar list []User\n\tfor _, u := range s.users {\n\t\tlist = append(list, u)\n\t}\n\treturn list\n}\n\nfunc (s *userService) CreateUser(user User) (User, error) {\n\ts.mutex.Lock()\n\tdefer s.mutex.Unlock()\n\n\t// Generate a UUID for the new user\n\tuser.ID = uuid.New().String()\n\ts.users[user.ID] = user\n\treturn user, nil\n}\n\nfunc (s *userService) GetUserByID(id string) (User, bool) {\n\ts.mutex.RLock()\n\tdefer s.mutex.RUnlock()\n\tu, ok := s.users[id]\n\treturn u, ok\n}\n"}} with response: [{"functionResponse":{"name":"edit_code","response":{"content":[{"type":"text","text":"failed to read file: open internal/service/logic.go: no such file or directory"}],"isError":true}}}]
+missing pgrep output
+missing pgrep output
+Error executing tool edit_code: MCP tool 'edit_code' reported tool error for function call: {"name":"edit_code","args":{"new_content":"package main\n\nimport (\n\t\"log\"\n\t\"net/http\"\n\n\t\"experiment/internal/api\"\n\t\"experiment/internal/service\"\n)\n\nfunc main() {\n\t// Initialize the user service\n\tuserService := service.NewUserService()\n\n\t// Initialize user handlers with the service\n\tuserHandlers := api.NewUserHandlers(userService)\n\n\t// Register HTTP routes\n\tuserHandlers.RegisterRoutes()\n\n\tlog.Println(\"Server starting on :8080...\")\n\tif err := http.ListenAndServe(\":8080\", nil); err != nil {\n\t\tlog.Fatal(err)\n\t}\n}\n","file_path":"main.go","search_context":"package main"}} with response: [{"functionResponse":{"name":"edit_code","response":{"content":[{"type":"text","text":"Syntax Error (Pre-commit): 28:1: imports must appear before other declarations"}],"isError":true}}}]

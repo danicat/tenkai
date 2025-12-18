@@ -1,0 +1,16 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 36.599249999999984
+[STARTUP] Recording metric for phase: load_settings duration: 2.054583999999977
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.7442919999999731
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.18704200000002
+[STARTUP] Recording metric for phase: load_cli_config duration: 15.22904200000005
+[STARTUP] Recording metric for phase: initialize_app duration: 4.0645829999999705
+[STARTUP] Recording metric for phase: authenticate duration: 1.3604589999999916
+[STARTUP] Recording metric for phase: discover_tools duration: 2.9053330000000415
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 16.40975000000003
+Error executing tool read_file: Tool "read_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "read_godoc", "inspect_file", "web_fetch"?
+Error executing tool read_file: Tool "read_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "read_godoc", "inspect_file", "web_fetch"?

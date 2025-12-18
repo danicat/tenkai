@@ -1,0 +1,24 @@
+mode: set
+experiment/server.go:10.59,11.32 1 0
+experiment/server.go:11.32,14.3 2 0
+experiment/server.go:15.2,16.16 2 0
+experiment/server.go:16.16,18.3 1 0
+experiment/server.go:19.2,19.36 1 0
+experiment/server.go:22.58,23.33 1 0
+experiment/server.go:23.33,26.3 2 0
+experiment/server.go:27.2,28.16 2 0
+experiment/server.go:28.16,31.3 2 0
+experiment/server.go:32.2,33.15 2 0
+experiment/server.go:36.35,41.2 4 0
+experiment/server.go:43.13,46.58 3 0
+experiment/server.go:46.58,48.3 1 0
+experiment/tax_calculator.go:13.82,14.16 1 1
+experiment/tax_calculator.go:14.16,16.3 1 1
+experiment/tax_calculator.go:18.2,22.25 3 1
+experiment/tax_calculator.go:22.25,26.3 3 1
+experiment/tax_calculator.go:30.2,30.25 1 1
+experiment/tax_calculator.go:30.25,34.3 3 1
+experiment/tax_calculator.go:37.2,37.25 1 1
+experiment/tax_calculator.go:37.25,39.3 1 1
+experiment/tax_calculator.go:41.2,41.17 1 1
+experiment/tax_calculator.go:47.27,49.2 1 1

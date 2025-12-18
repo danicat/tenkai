@@ -1,0 +1,16 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 32.919167000000016
+[STARTUP] Recording metric for phase: load_settings duration: 1.7860000000000582
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.47145899999998164
+[STARTUP] Recording metric for phase: parse_arguments duration: 7.304208000000017
+[STARTUP] Recording metric for phase: load_cli_config duration: 13.70620800000006
+[STARTUP] Recording metric for phase: initialize_app duration: 3.869874999999979
+[STARTUP] Recording metric for phase: authenticate duration: 1.332708000000025
+[STARTUP] Recording metric for phase: discover_tools duration: 2.9063750000000255
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 17.00883299999998
+Error executing tool write_file: Tool "write_file" not found in registry. Tools must use the exact names that are registered. Did you mean one of: "write_todos", "edit_code", "inspect_file"?
+missing pgrep output

@@ -1,0 +1,12 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 37.50929099999996
+[STARTUP] Recording metric for phase: load_settings duration: 1.7932499999999436
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5444579999999632
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.96008299999994
+[STARTUP] Recording metric for phase: load_cli_config duration: 15.608083999999963
+[STARTUP] Recording metric for phase: initialize_app duration: 4.345416
+[STARTUP] Recording metric for phase: authenticate duration: 1.5099579999999833
+[STARTUP] Recording metric for phase: discover_tools duration: 3.121208000000024
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 0.2120830000000069

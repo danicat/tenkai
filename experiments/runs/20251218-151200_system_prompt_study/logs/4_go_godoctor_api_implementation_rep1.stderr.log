@@ -1,0 +1,15 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 34.96550000000002
+[STARTUP] Recording metric for phase: load_settings duration: 1.9598330000000033
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5494589999999562
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.186584000000039
+[STARTUP] Recording metric for phase: load_cli_config duration: 14.509292000000073
+[STARTUP] Recording metric for phase: initialize_app duration: 3.9393330000000333
+[STARTUP] Recording metric for phase: authenticate duration: 1.3562500000000455
+[STARTUP] Recording metric for phase: discover_tools duration: 2.9462080000000697
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 18.26045799999997
+Error executing tool replace: A secondary check by an LLM determined that no changes were necessary to fulfill the instruction. Explanation: The original search failed because the target string 'Pages validation failed on the 'required' tag' was not found in the file. The relevant assertion for 'Pages' validation already uses the 'min' tag, specifically 'assert.Contains(t, errs["Pages"], "Pages validation failed on the 'min' tag")'. Therefore, the change requested by the instruction has already been applied, and no further changes are required.. Original error with the parameters given: Failed to edit, 0 occurrences found for old_string (	assert.Contains(t, errs["Pages"], "Pages validation failed on the 'required' tag")). Original old_string was (	assert.Contains(t, errs["Pages"], "Pages validation failed on the 'required' tag")) in /Users/petruzalek/projects/tenkai/experiments/runs/20251218-151200_system_prompt_study/4_go_godoctor/api_implementation/rep-1/main_test.go. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use read_file tool to verify.

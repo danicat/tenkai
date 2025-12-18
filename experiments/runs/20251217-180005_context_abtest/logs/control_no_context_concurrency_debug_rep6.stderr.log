@@ -1,0 +1,14 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+Server 'godoctor' supports tool updates. Listening for changes...
+Server 'godoctor' supports resource updates. Listening for changes...
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 40.04616599999986
+[STARTUP] Recording metric for phase: load_settings duration: 2.299541999999974
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5404579999999441
+[STARTUP] Recording metric for phase: parse_arguments duration: 8.54079200000001
+[STARTUP] Recording metric for phase: load_cli_config duration: 17.244957999999997
+[STARTUP] Recording metric for phase: initialize_app duration: 4.684083999999984
+[STARTUP] Recording metric for phase: authenticate duration: 1.8570420000000922
+[STARTUP] Recording metric for phase: discover_tools duration: 3.314792000000125
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 18.27212499999996

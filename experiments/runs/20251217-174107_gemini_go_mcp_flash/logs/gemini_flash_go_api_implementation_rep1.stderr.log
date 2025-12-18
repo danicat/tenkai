@@ -1,0 +1,125 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+Session cleanup disabled: Either maxAge or maxCount must be specified
+[STARTUP] StartupProfiler.flush() called with 9 phases
+[STARTUP] Recording metric for phase: cli_startup duration: 33.736749999999915
+[STARTUP] Recording metric for phase: load_settings duration: 1.7513340000000426
+[STARTUP] Recording metric for phase: migrate_settings duration: 0.5129170000000158
+[STARTUP] Recording metric for phase: parse_arguments duration: 7.923208999999929
+[STARTUP] Recording metric for phase: load_cli_config duration: 13.934917000000041
+[STARTUP] Recording metric for phase: initialize_app duration: 3.9258330000000115
+[STARTUP] Recording metric for phase: authenticate duration: 1.387625000000071
+[STARTUP] Recording metric for phase: discover_tools duration: 2.8185000000000855
+[STARTUP] Recording metric for phase: initialize_mcp_clients duration: 0.18729099999995924
+Error executing tool replace: Failed to edit, 0 occurrences found for old_string (import (
+	"context"
+	"fmt"
+	"net/http"
+	"sync"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+)
+
+// CreateBook adds a new book to the store.
+func (s *Store) CreateBook(ctx context.Context, req CreateBookRequest) (Book, error) {
+	if err := s.validator.Struct(req); err != nil {
+		return Book{}, fmt.Errorf("validation failed: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	book := Book{
+		ID:    id,
+		Title:  req.Title,
+		Author: req.Author,
+		Pages:  req.Pages,
+	}
+
+	s.books[id] = book
+	return book, nil
+}
+
+// ... (rest of the file remains unchanged)
+
+func (s *Server) handleCreateBook() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req CreateBookRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		book, err := s.Store.CreateBook(r.Context(), req)
+		if err != nil {
+			if _, ok := err.(validator.ValidationErrors); ok {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			} else {
+				http.Error(w, "Failed to create book", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(book)
+	}
+}). Original old_string was (import (
+	"context"
+	"fmt"
+	"net/http"
+	"sync"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+)
+
+// CreateBook adds a new book to the store.
+func (s *Store) CreateBook(ctx context.Context, req CreateBookRequest) (Book, error) {
+	if err := s.validator.Struct(req); err != nil {
+		return Book{}, fmt.Errorf("validation failed: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	book := Book{
+		ID:    id,
+		Title:  req.Title,
+		Author: req.Author,
+		Pages:  req.Pages,
+	}
+
+	s.books[id] = book
+	return book, nil
+}
+
+// ... (rest of the file remains unchanged)
+
+func (s *Server) handleCreateBook() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req CreateBookRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		book, err := s.Store.CreateBook(r.Context(), req)
+		if err != nil {
+			if _, ok := err.(validator.ValidationErrors); ok {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			} else {
+				http.Error(w, "Failed to create book", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(book)
+	}
+}) in /Users/petruzalek/projects/tenkai/experiments/runs/20251217-174107_gemini_go_mcp_flash/gemini_flash_go/api_implementation/rep-1/internal/bookstore/bookstore.go. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use read_file tool to verify.
