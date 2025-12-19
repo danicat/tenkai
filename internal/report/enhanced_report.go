@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type EnhancedMarkdownGenerator struct {
 	Cfg     *config.Configuration
 	Notes   []string
 	w       io.Writer
+	stats   []avgMetrics
 }
 
 func (r *EnhancedMarkdownGenerator) Generate() error {
@@ -29,6 +31,8 @@ func (r *EnhancedMarkdownGenerator) Generate() error {
 		return r.Results[i].Alternative < r.Results[j].Alternative
 	})
 
+	r.calculateStats()
+
 	r.writeHeader()
 	r.writeExecutiveSummary()
 	r.writeExperimentParameters()
@@ -36,11 +40,170 @@ func (r *EnhancedMarkdownGenerator) Generate() error {
 	r.writePerformanceComparison()
 	r.writeSummaryByScenario()
 	r.writeDetailedMetrics()
+	r.writeEvaluationDetails()
 	r.writeToolUsage()
 	r.writeFailureAnalysis()
 	r.writeConclusion()
 
 	return nil
+}
+
+func (r *EnhancedMarkdownGenerator) calculateStats() {
+	// Group by alternative
+	type altMetrics struct {
+		totalRuns      int
+		successes      int
+		timeouts       int
+		totalTokens    int64
+		totalLint      int
+		totalDur       time.Duration
+		testsPassed    int
+		testsMeasured  int
+		totalToolCalls int
+		failedTools    int
+
+		// Raw data for stats
+		durations []float64
+		tokens    []float64
+		lints     []float64
+	}
+
+	byAlt := make(map[string]*altMetrics)
+	var altNames []string
+	if r.Cfg != nil {
+		for _, alt := range r.Cfg.Alternatives {
+			altNames = append(altNames, alt.Name)
+			byAlt[alt.Name] = &altMetrics{}
+		}
+	}
+
+	for _, res := range r.Results {
+		if _, ok := byAlt[res.Alternative]; !ok {
+			byAlt[res.Alternative] = &altMetrics{}
+			found := false
+			for _, n := range altNames {
+				if n == res.Alternative {
+					found = true
+					break
+				}
+			}
+			if !found {
+				altNames = append(altNames, res.Alternative)
+			}
+		}
+		m := byAlt[res.Alternative]
+		m.totalRuns++
+
+		// A run is successful ONLY if there's no technical error AND it actually passed at least one test.
+		// Runs that skip evaluation (e.g. no code generated) or fail all tests are not successes.
+		isSuccess := res.Error == nil
+		if res.EvaluationMetrics != nil && res.EvaluationMetrics.TestsPassed == 0 {
+			isSuccess = false
+		}
+
+		if isSuccess {
+			m.successes++
+			m.totalDur += res.Duration // Only add duration for success
+			m.durations = append(m.durations, float64(res.Duration.Seconds()))
+			if res.AgentMetrics != nil {
+				m.totalTokens += int64(res.AgentMetrics.TotalTokens)
+				m.tokens = append(m.tokens, float64(res.AgentMetrics.TotalTokens))
+			}
+			if res.EvaluationMetrics != nil {
+				m.totalLint += res.EvaluationMetrics.LintIssues
+				m.lints = append(m.lints, float64(res.EvaluationMetrics.LintIssues))
+			}
+		} else if res.Error != nil && strings.Contains(res.Error.Error(), "timeout") {
+			m.timeouts++
+		}
+
+		if res.Error == nil && res.AgentMetrics != nil {
+			for _, tc := range res.AgentMetrics.ToolCalls {
+				m.totalToolCalls++
+				if tc.Status != "success" {
+					m.failedTools++
+				}
+			}
+		}
+
+		if res.EvaluationMetrics != nil {
+			m.testsMeasured++
+			if res.EvaluationMetrics.TestsPassed > 0 {
+				m.testsPassed++
+			}
+		}
+	}
+
+	// Calculate averages
+	r.stats = []avgMetrics{}
+	for _, name := range altNames {
+		m := byAlt[name]
+		if m.totalRuns == 0 {
+			continue
+		}
+
+		toolSuccessRate := 0.0
+		if m.totalToolCalls > 0 {
+			toolSuccessRate = float64(m.totalToolCalls-m.failedTools) / float64(m.totalToolCalls) * 100
+		}
+
+		testPassRate := 0.0
+		if m.testsMeasured > 0 {
+			testPassRate = float64(m.testsPassed) / float64(m.testsMeasured) * 100
+		}
+
+		avgDur := time.Duration(0)
+		avgTokens := int64(0)
+		avgLint := 0.0
+		if m.successes > 0 {
+			avgDur = m.totalDur / time.Duration(m.successes)
+			avgTokens = m.totalTokens / int64(m.successes)
+			avgLint = float64(m.totalLint) / float64(m.successes)
+		}
+
+		r.stats = append(r.stats, avgMetrics{
+			name:           name,
+			successRate:    float64(m.successes) / float64(m.totalRuns) * 100,
+			avgDur:         avgDur,
+			avgTokens:      avgTokens,
+			avgLint:        avgLint,
+			testPass:       testPassRate,
+			toolSuccess:    toolSuccessRate,
+			timeouts:       m.timeouts,
+			totalRuns:      m.totalRuns,
+			completedRuns:  m.successes,
+			totalToolCalls: m.totalToolCalls,
+			durations:      m.durations,
+			tokens:         m.tokens,
+			lints:          m.lints,
+		})
+	}
+
+	// Identify Control (first in list)
+	var control *avgMetrics
+	if len(r.stats) > 0 {
+		control = &r.stats[0]
+
+		// Calculate P-values for alternatives vs control
+		for i := 1; i < len(r.stats); i++ {
+			a := &r.stats[i]
+			a.pDur = WelchTTest(control.durations, a.durations)
+			a.pTokens = WelchTTest(control.tokens, a.tokens)
+			a.pLint = WelchTTest(control.lints, a.lints)
+
+			// Fisher exact test
+			a.pSucc = FisherExactTest(
+				control.completedRuns, control.totalRuns-control.completedRuns,
+				a.completedRuns, a.totalRuns-a.completedRuns,
+			)
+
+			// Statistical Analysis for Timeouts
+			a.pTime = FisherExactTest(
+				control.timeouts, control.totalRuns-control.timeouts,
+				a.timeouts, a.totalRuns-a.timeouts,
+			)
+		}
+	}
 }
 
 func (r *EnhancedMarkdownGenerator) writeHeader() {
@@ -75,13 +238,14 @@ func (r *EnhancedMarkdownGenerator) writeExperimentParameters() {
 		}
 		fmt.Fprintf(r.w, "  - Model: `%s`\n", getValue(alt.Args, "--model"))
 		if alt.SystemPromptFile != "" {
-			fmt.Fprintf(r.w, "  - System Prompt: `%s`\n", alt.SystemPromptFile)
+			fmt.Fprintf(r.w, "  - System Prompt: `%s`\n", filepath.Base(alt.SystemPromptFile))
 		} else if alt.Env != nil && alt.Env["GEMINI_SYSTEM_MD"] != "" {
-			fmt.Fprintf(r.w, "  - System Prompt: `%s`\n", alt.Env["GEMINI_SYSTEM_MD"])
+			path := alt.Env["GEMINI_SYSTEM_MD"]
+			fmt.Fprintf(r.w, "  - System Prompt: `%s`\n", filepath.Base(path))
 		}
 
 		if alt.SettingsPath != "" {
-			fmt.Fprintf(r.w, "  - MCP Settings: `%s`\n", alt.SettingsPath)
+			fmt.Fprintf(r.w, "  - MCP Settings: `%s`\n", filepath.Base(alt.SettingsPath))
 		}
 	}
 }
@@ -108,64 +272,63 @@ func (r *EnhancedMarkdownGenerator) writeNotes() {
 func (r *EnhancedMarkdownGenerator) writeExecutiveSummary() {
 	fmt.Fprintln(r.w, "\n## 📊 Executive Summary")
 
+	if len(r.stats) == 0 {
+		fmt.Fprintln(r.w, "No data available.")
+		return
+	}
+
+	// 1. Overall Health
 	totalRuns := len(r.Results)
 	successCount := 0
-	timeouts := 0
-	loops := 0
-	totalTokens := 0
-	totalLint := 0
-	totalTests := 0
-	passedTests := 0
-	completedRunsForStats := 0
-
 	for _, res := range r.Results {
 		if res.Error == nil {
 			successCount++
-			completedRunsForStats++
-			// Only include tokens/lint for successful runs to avoid skewing
-			if res.AgentMetrics != nil {
-				totalTokens += res.AgentMetrics.TotalTokens
-				if res.AgentMetrics.LoopDetected {
-					loops++
-				}
-			}
-			if res.EvaluationMetrics != nil {
-				totalLint += res.EvaluationMetrics.LintIssues
-			}
-		} else if strings.Contains(res.Error.Error(), "timeout") {
-			timeouts++
-		}
-
-		// Tests might run even if agent failed (metrics might be partial)
-		if res.EvaluationMetrics != nil {
-			if res.EvaluationMetrics.TestsPassed > 0 || res.EvaluationMetrics.TestsFailed > 0 {
-				totalTests++
-				if res.EvaluationMetrics.TestsPassed > 0 {
-					passedTests++
-				}
-			}
 		}
 	}
+	globalSuccessRate := float64(successCount) / float64(totalRuns) * 100
 
-	avgTokens := 0
-	avgLint := 0.0
-	if completedRunsForStats > 0 {
-		avgTokens = totalTokens / completedRunsForStats
-		avgLint = float64(totalLint) / float64(completedRunsForStats)
+	healthEmoji := "🟢"
+	if globalSuccessRate < 80 {
+		healthEmoji = "🟡"
+	}
+	if globalSuccessRate < 50 {
+		healthEmoji = "🔴"
 	}
 
-	fmt.Fprintln(r.w, "\n### Key Metrics")
-	fmt.Fprintf(r.w, "- **Total Runs**: %d\n", totalRuns)
-	fmt.Fprintf(r.w, "- **Success Rate**: %.1f%% (%d/%d completed)\n",
-		float64(successCount)/float64(totalRuns)*100, successCount, totalRuns)
-	fmt.Fprintf(r.w, "- **Test Pass Rate**: %.1f%% (%d/%d)\n",
-		float64(passedTests)/float64(totalTests)*100, passedTests, totalTests)
-	fmt.Fprintf(r.w, "- **Timeouts**: %d runs (%.1f%%)\n", timeouts, float64(timeouts)/float64(totalRuns)*100)
-	if loops > 0 {
-		fmt.Fprintf(r.w, "- **Loop Warnings**: %d runs\n", loops)
+	fmt.Fprintf(r.w, "This experiment executed **%d runs** across **%d scenarios** with an overall success rate of **%.1f%%** %s.\n\n",
+		totalRuns, len(r.Cfg.Scenarios), globalSuccessRate, healthEmoji)
+
+	// 2. Identify Winners
+	var bestSuccess *avgMetrics
+	var bestSpeed *avgMetrics
+	var bestEfficiency *avgMetrics
+
+	for i := range r.stats {
+		s := &r.stats[i]
+		if bestSuccess == nil || s.successRate > bestSuccess.successRate {
+			bestSuccess = s
+		}
+		if s.completedRuns > 0 {
+			if bestSpeed == nil || s.avgDur < bestSpeed.avgDur {
+				bestSpeed = s
+			}
+			if bestEfficiency == nil || s.avgTokens < bestEfficiency.avgTokens {
+				bestEfficiency = s
+			}
+		}
 	}
-	fmt.Fprintf(r.w, "- **Avg Tokens (Success Only)**: %s\n", formatNumber(avgTokens))
-	fmt.Fprintf(r.w, "- **Avg Lint Issues (Success Only)**: %.1f\n", avgLint)
+
+	if bestSuccess != nil {
+		fmt.Fprintln(r.w, "### 🏆 Key Findings")
+		fmt.Fprintf(r.w, "- **Most Reliable**: **%s** passed %.1f%% of runs.\n", bestSuccess.name, bestSuccess.successRate)
+
+		if bestSpeed != nil {
+			fmt.Fprintf(r.w, "- **Fastest**: **%s** averaged %s per successful run.\n", bestSpeed.name, bestSpeed.avgDur.Round(time.Millisecond))
+		}
+		if bestEfficiency != nil {
+			fmt.Fprintf(r.w, "- **Most Efficient**: **%s** used only %s tokens per run.\n", bestEfficiency.name, formatNumber(bestEfficiency.avgTokens))
+		}
+	}
 }
 
 func (r *EnhancedMarkdownGenerator) writeFailureAnalysis() {
@@ -260,7 +423,6 @@ func (r *EnhancedMarkdownGenerator) writeFailureAnalysis() {
 		}
 
 		// Scenario-level failure rates
-		fmt.Fprintln(r.w, "\n### Problem Scenarios")
 		scenarioStats := make(map[string]struct{ total, failed int })
 		for _, res := range r.Results {
 			s := scenarioStats[res.Scenario]
@@ -273,10 +435,18 @@ func (r *EnhancedMarkdownGenerator) writeFailureAnalysis() {
 			scenarioStats[res.Scenario] = s
 		}
 
+		var problemScenarios []string
 		for scenario, stats := range scenarioStats {
 			failRate := float64(stats.failed) / float64(stats.total) * 100
 			if failRate > 50 {
-				fmt.Fprintf(r.w, "- **%s**: %.0f%% skip rate (likely broken scenario)\n", scenario, failRate)
+				problemScenarios = append(problemScenarios, fmt.Sprintf("- **%s**: %.0f%% skip rate (likely broken scenario)", scenario, failRate))
+			}
+		}
+
+		if len(problemScenarios) > 0 {
+			fmt.Fprintln(r.w, "\n### Problem Scenarios")
+			for _, line := range problemScenarios {
+				fmt.Fprintln(r.w, line)
 			}
 		}
 	}
@@ -367,162 +537,12 @@ type avgMetrics struct {
 func (r *EnhancedMarkdownGenerator) writePerformanceComparison() {
 	fmt.Fprintln(r.w, "\n## 🏆 Performance Comparison")
 
-	// Group by alternative
-	type altMetrics struct {
-		totalRuns      int
-		successes      int
-		timeouts       int
-		totalTokens    int64
-		totalLint      int
-		totalDur       time.Duration
-		testsPassed    int
-		testsMeasured  int
-		totalToolCalls int
-		failedTools    int
-
-		// Raw data for stats
-		durations []float64
-		tokens    []float64
-		lints     []float64
-	}
-
-	byAlt := make(map[string]*altMetrics)
-	var altNames []string
-	if r.Cfg != nil {
-		for _, alt := range r.Cfg.Alternatives {
-			altNames = append(altNames, alt.Name)
-			byAlt[alt.Name] = &altMetrics{}
-		}
-	}
-
-	for _, res := range r.Results {
-		if _, ok := byAlt[res.Alternative]; !ok {
-			byAlt[res.Alternative] = &altMetrics{}
-			found := false
-			for _, n := range altNames {
-				if n == res.Alternative {
-					found = true
-					break
-				}
-			}
-			if !found {
-				altNames = append(altNames, res.Alternative)
-			}
-		}
-		m := byAlt[res.Alternative]
-		m.totalRuns++
-
-		if res.Error == nil {
-			m.successes++
-			m.totalDur += res.Duration // Only add duration for success
-			m.durations = append(m.durations, float64(res.Duration.Seconds()))
-			if res.AgentMetrics != nil {
-				m.totalTokens += int64(res.AgentMetrics.TotalTokens) // Only add tokens for success
-				m.tokens = append(m.tokens, float64(res.AgentMetrics.TotalTokens))
-			}
-			if res.EvaluationMetrics != nil {
-				m.totalLint += res.EvaluationMetrics.LintIssues
-				m.lints = append(m.lints, float64(res.EvaluationMetrics.LintIssues))
-			}
-		} else if strings.Contains(res.Error.Error(), "timeout") {
-			m.timeouts++
-		}
-
-		// Tool calls often happen even in failed runs, so we count them all?
-		// User said: "exclude failed runs from all data analysis... skewing the data".
-		// So we should ONLY count tool metrics from success runs too?
-		// Usually tool reliability is interesting even in failed runs.
-		// But if we want consistent denominators, maybe stick to success runs for tool accuracy too?
-		// Let's stick to success runs for stats.
-
-		if res.Error == nil && res.AgentMetrics != nil {
-			for _, tc := range res.AgentMetrics.ToolCalls {
-				m.totalToolCalls++
-				if tc.Status != "success" {
-					m.failedTools++
-				}
-			}
-		}
-
-		if res.EvaluationMetrics != nil {
-			m.testsMeasured++
-			if res.EvaluationMetrics.TestsPassed > 0 {
-				m.testsPassed++
-			}
-		}
-	}
-
-	// Calculate averages
-	avgs := []avgMetrics{}
-	for _, name := range altNames {
-		m := byAlt[name]
-		if m.totalRuns == 0 {
-			continue
-		}
-
-		toolSuccessRate := 0.0
-		if m.totalToolCalls > 0 {
-			toolSuccessRate = float64(m.totalToolCalls-m.failedTools) / float64(m.totalToolCalls) * 100
-		}
-
-		testPassRate := 0.0
-		if m.testsMeasured > 0 {
-			testPassRate = float64(m.testsPassed) / float64(m.testsMeasured) * 100
-		}
-
-		// Avoid division by zero if all runs failed
-		avgDur := time.Duration(0)
-		avgTokens := int64(0)
-		avgLint := 0.0
-		if m.successes > 0 {
-			avgDur = m.totalDur / time.Duration(m.successes)
-			avgTokens = m.totalTokens / int64(m.successes)
-			avgLint = float64(m.totalLint) / float64(m.successes)
-		}
-
-		avgs = append(avgs, avgMetrics{
-			name:           name,
-			successRate:    float64(m.successes) / float64(m.totalRuns) * 100,
-			avgDur:         avgDur,
-			avgTokens:      avgTokens,
-			avgLint:        avgLint,
-			testPass:       testPassRate,
-			toolSuccess:    toolSuccessRate,
-			timeouts:       m.timeouts,
-			totalRuns:      m.totalRuns,
-			completedRuns:  m.successes,
-			totalToolCalls: m.totalToolCalls,
-			durations:      m.durations,
-			tokens:         m.tokens,
-			lints:          m.lints,
-		})
-	}
+	avgs := r.stats
 
 	// Identify Control (first in list)
 	var control *avgMetrics
 	if len(avgs) > 0 {
 		control = &avgs[0]
-
-		// Calculate P-values for alternatives vs control
-		for i := 1; i < len(avgs); i++ {
-			a := &avgs[i]
-			a.pDur = WelchTTest(control.durations, a.durations)
-			a.pTokens = WelchTTest(control.tokens, a.tokens)
-			a.pLint = WelchTTest(control.lints, a.lints)
-
-			// Fisher exact test for success rate
-			// Table: [Cont_Succ, Cont_Fail] vs [Alt_Succ, Alt_Fail]
-			a.pSucc = FisherExactTest(
-				control.completedRuns, control.totalRuns-control.completedRuns,
-				a.completedRuns, a.totalRuns-a.completedRuns,
-			)
-
-			// Statistical Analysis for Timeouts
-			a.pTime = FisherExactTest(
-				control.timeouts, control.totalRuns-control.timeouts,
-				a.timeouts, a.totalRuns-a.timeouts,
-			)
-		}
 	}
 
 	// Calculate bests for trophies
@@ -896,6 +916,64 @@ func (r *EnhancedMarkdownGenerator) writeDetailedMetrics() {
 	fmt.Fprintln(r.w, "\n</details>")
 }
 
+func (r *EnhancedMarkdownGenerator) writeEvaluationDetails() {
+	// Only show if there are failures or lint issues
+	hasIssues := false
+	for _, res := range r.Results {
+		if res.EvaluationMetrics != nil {
+			if len(res.EvaluationMetrics.Tests) > 0 || len(res.EvaluationMetrics.Lints) > 0 {
+				hasIssues = true
+				break
+			}
+		}
+	}
+
+	if !hasIssues {
+		return
+	}
+
+	fmt.Fprintln(r.w, "\n## 🧪 Detailed Evaluation (Tests & Lint)")
+
+	for _, res := range r.Results {
+		if res.EvaluationMetrics == nil {
+			continue
+		}
+
+		if res.EvaluationMetrics.TestsFailed == 0 && res.EvaluationMetrics.LintIssues == 0 {
+			continue
+		}
+
+		fmt.Fprintf(r.w, "\n### %s | %s | Rep %d\n", res.Alternative, res.Scenario, res.Repetition)
+
+		if res.EvaluationMetrics.TestsFailed > 0 {
+			fmt.Fprintln(r.w, "\n#### ❌ Test Failures")
+			for _, t := range res.EvaluationMetrics.Tests {
+				if t.Status == "FAIL" {
+					fmt.Fprintf(r.w, "- **%s**\n", t.Name)
+					if t.Output != "" {
+						fmt.Fprintln(r.w, "  ```")
+						// Indent output for better formatting
+						lines := strings.Split(strings.TrimSpace(t.Output), "\n")
+						for _, l := range lines {
+							fmt.Fprintf(r.w, "    %s\n", l)
+						}
+						fmt.Fprintln(r.w, "  ```")
+					}
+				}
+			}
+		}
+
+		if res.EvaluationMetrics.LintIssues > 0 {
+			fmt.Fprintln(r.w, "\n#### ⚠️ Lint Findings")
+			fmt.Fprintln(r.w, "| File | Line | Rule | Message |")
+			fmt.Fprintln(r.w, "|---|---|---|---|")
+			for _, l := range res.EvaluationMetrics.Lints {
+				fmt.Fprintf(r.w, "| %s | %d | `%s` | %s |\n", l.File, l.Line, l.RuleID, l.Message)
+			}
+		}
+	}
+}
+
 func (r *EnhancedMarkdownGenerator) writeToolUsage() {
 	fmt.Fprintln(r.w, "\n## 🔧 Tool Usage Analysis")
 
@@ -1094,60 +1172,69 @@ func (r *EnhancedMarkdownGenerator) writeToolUsage() {
 func (r *EnhancedMarkdownGenerator) writeConclusion() {
 	fmt.Fprintln(r.w, "\n## 🎯 Conclusion")
 
-	// This is a bit inefficient to recalculate but safer without a massive refactor of the generator struct
-	// Let's assume we want to write a summary based on the performance comparison results.
+	// Identify the winner
+	var winner *avgMetrics
+	var fastest *avgMetrics
 
-	fmt.Fprintln(r.w, "\n### Summary of Findings")
-	// For the actual code, I should have stored 'avgs' somewhere.
-	// Let's refactor EnhancedMarkdownGenerator to store avgs if needed.
-	// But since I'm just editing the file, I'll use what's available.
+	// Simple heuristic scoring: Success > Speed > Tokens
+	// But let's just highlight the trade-offs
 
-	// Actually, let's just make the text more descriptive and honest about ties.
+	for i := range r.stats {
+		s := &r.stats[i]
+		if winner == nil || s.successRate > winner.successRate {
+			winner = s
+		} else if s.successRate == winner.successRate {
+			// Tie-break on speed
+			if s.completedRuns > 0 && winner.completedRuns > 0 && s.avgDur < winner.avgDur {
+				winner = s
+			}
+		}
 
-	fmt.Fprintln(r.w, "The experiment results indicate that:")
-
-	// Check for overall success rate
-	totalRuns := len(r.Results)
-	successes := 0
-	for _, res := range r.Results {
-		if res.Error == nil {
-			successes++
+		if s.completedRuns > 0 {
+			if fastest == nil || s.avgDur < fastest.avgDur {
+				fastest = s
+			}
 		}
 	}
 
-	if successes == 0 {
-		fmt.Fprintln(r.w, "- **No alternatives succeeded.** The experiment configuration or scenario might be broken.")
+	if winner == nil {
+		fmt.Fprintln(r.w, "No clear conclusion could be drawn as no alternatives successfully completed the tasks.")
 		return
 	}
 
-	if float64(successes)/float64(totalRuns) < 0.5 {
-		fmt.Fprintln(r.w, "- **Low overall success rate.** Conclusions should be treated with caution due to high failure/timeout rates.")
-	}
+	fmt.Fprintln(r.w, "\n### 🏅 Final Verdict")
+	fmt.Fprintf(r.w, "Based on **%d experiment runs**, the recommended configuration is **%s**.\n\n", len(r.Results), winner.name)
 
-	// Find the best and check for ties
-	// (This part needs more state than we have in writeConclusion currently without refactoring writePerformanceComparison)
-	// Let's assume we just want to output a message about significance.
+	fmt.Fprintln(r.w, "**Reasoning:**")
+	fmt.Fprintf(r.w, "- It achieved the highest reliability with a **%.1f%% success rate**.\n", winner.successRate)
 
-	fmt.Fprintln(r.w, "\n### Statistical Trustworthiness")
-	if r.Cfg != nil && r.Cfg.Repetitions < 10 {
-		fmt.Fprintf(r.w, "- **Limited Sample Size:** With only %d repetitions, the statistical significance tests (Welch's T-Test and Fisher's Exact) have low power. Small differences may be due to noise rather than configuration changes.\n", r.Cfg.Repetitions)
-	} else {
-		fmt.Fprintln(r.w, "- **Robust Sample Size:** Data patterns are increasingly likely to represent true behavior differences.")
-	}
-
-	// Check for timeouts
-	timeoutCount := 0
-	for _, res := range r.Results {
-		if res.Error != nil && strings.Contains(res.Error.Error(), "timeout") {
-			timeoutCount++
+	// Compare to control if winner is not control
+	if r.stats[0].name != winner.name {
+		control := r.stats[0]
+		fmt.Fprintf(r.w, "- Compared to control (%s), it is ", control.name)
+		if winner.successRate > control.successRate {
+			fmt.Fprintf(r.w, "**more reliable** (+%.1f%%) ", winner.successRate-control.successRate)
+		} else {
+			fmt.Fprint(r.w, "equally reliable ")
 		}
-	}
-	if timeoutCount > 0 {
-		fmt.Fprintf(r.w, "- **Timeout Bias:** %d runs timed out. This can skew efficiency metrics (Duration/Tokens) as only successful runs are averaged.\n", timeoutCount)
+
+		if winner.avgDur < control.avgDur {
+			fmt.Fprintf(r.w, "and **faster**.")
+		} else {
+			fmt.Fprintf(r.w, "but **slower**.")
+		}
+		fmt.Fprintln(r.w)
 	}
 
-	fmt.Fprintln(r.w, "\n### Recommendation")
-	fmt.Fprintln(r.w, "Based on the observed tool calling patterns and success rates, look for alternatives with **higher success rates** and **lower token counts**. If an alternative is marked with `*` or `**` in the comparison table, it has demonstrated a statistically significant lead over the control.")
+	if fastest != nil && fastest.name != winner.name {
+		fmt.Fprintf(r.w, "\n> **Note:** If raw speed is the only priority, **%s** was the fastest alternative (%.1fs/run), but at the cost of lower reliability (%.1f%% success).\n",
+			fastest.name, fastest.avgDur.Seconds(), fastest.successRate)
+	}
+
+	if r.Cfg.Repetitions < 10 {
+		fmt.Fprintln(r.w, "\n> [!TIP]")
+		fmt.Fprintln(r.w, "> Run this experiment with more repetitions (e.g., 10+) to confirm these findings with higher statistical confidence.")
+	}
 }
 
 func formatNumber(n interface{}) string {

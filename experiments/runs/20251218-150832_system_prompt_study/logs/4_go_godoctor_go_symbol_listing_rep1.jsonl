@@ -1,8 +1,0 @@
-{"type":"init","timestamp":"2025-12-18T15:08:41.677Z","session_id":"ee61ab77-e435-4bb3-a142-1486ff61aa74","model":"gemini-2.5-flash"}
-{"type":"message","timestamp":"2025-12-18T15:08:41.677Z","role":"user","content":"List all exported functions and types in the `api` package. Use the most efficient tools available for Go codebase analysis.\n\n\n"}
-{"type":"tool_use","timestamp":"2025-12-18T15:08:43.615Z","tool_name":"inspect_file","tool_id":"inspect_file-1766070523615-b572fad9e11a08","parameters":{"file_path":"api/main.go"}}
-{"type":"tool_result","timestamp":"2025-12-18T15:08:43.644Z","tool_id":"inspect_file-1766070523615-b572fad9e11a08","status":"success","output":"Registered 2 resources:\n- fmt.Println\n- fmt.Printf"}
-{"type":"tool_use","timestamp":"2025-12-18T15:08:46.009Z","tool_name":"run_shell_command","tool_id":"run_shell_command-1766070526009-de9777a4c82248","parameters":{"description":"List all exported functions and types in the api package.","command":"go doc ./api"}}
-{"type":"tool_result","timestamp":"2025-12-18T15:08:46.150Z","tool_id":"run_shell_command-1766070526009-de9777a4c82248","status":"success","output":"package api // import \"experiment/api\"\n\nfunc GetInfo() string\nfunc ProcessData(d Data) error\ntype Data struct{ ... }"}
-{"type":"message","timestamp":"2025-12-18T15:08:50.649Z","role":"assistant","content":"In the `api` package, the following exported functions and types are available:\n\n- `func GetInfo() string`\n- `func ProcessData(d Data) error`\n- `type Data struct{ ... }`","delta":true}
-{"type":"result","timestamp":"2025-12-18T15:08:50.654Z","status":"success","stats":{"total_tokens":23119,"input_tokens":22659,"output_tokens":96,"cached":6765,"input":15894,"duration_ms":8977,"tool_calls":2}}

@@ -96,12 +96,16 @@ func (r *Reporter) GenerateMarkdownReport(path string) error {
 	}
 	defer f.Close()
 
-	// Use enhanced generator
+	return r.GenerateMarkdown(f)
+}
+
+// GenerateMarkdown writes the enhanced markdown report to the provided writer.
+func (r *Reporter) GenerateMarkdown(w io.Writer) error {
 	gen := &EnhancedMarkdownGenerator{
 		Results: r.Results,
 		Cfg:     r.Cfg,
 		Notes:   r.Notes,
-		w:       f,
+		w:       w,
 	}
 
 	return gen.Generate()
@@ -128,7 +132,7 @@ func (r *Reporter) generateConclusion() (string, error) {
 		lint := 0
 		if res.EvaluationMetrics != nil {
 			lint = res.EvaluationMetrics.LintIssues
-			if res.EvaluationMetrics.TestsFailed > 0 {
+			if res.EvaluationMetrics.TestsPassed == 0 || res.EvaluationMetrics.TestsFailed > 0 {
 				status = "FAIL"
 			}
 		}

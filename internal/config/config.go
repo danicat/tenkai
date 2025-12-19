@@ -34,7 +34,8 @@ type Alternative struct {
 
 // Scenario represents a coding task template.
 type Scenario struct {
-	Name string `yaml:"name"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
 }
 
 // Load reads the configuration from the specified file path.

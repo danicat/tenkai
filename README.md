@@ -7,48 +7,89 @@ Tenkai is a powerful framework designed to evaluate and optimize the tool-callin
 In the rapidly evolving landscape of agentic coding, selecting the right tools and providing the optimal context is critical. Tenkai helps developers:
 - **Analyze Tool Selection:** See which tools agents prefer for different tasks.
 - **Evaluate Prompt Strategies:** Test how system prompt variations impact performance and efficiency.
-- **Measure Reliability:** Track success rates, timeouts, and tool accuracy.
+- **Measure Reliability:** Track success rates, timeouts, and tool accuracy with statistical rigor.
 - **Optimize Efficiency:** Monitor token usage and duration across experiments.
 
-## Key Features
-
-- **Isolated Workspaces:** Each experiment run occurs in a cleanly prepared, isolated environment.
-- **Flexible Configuration:** Define complex experiments using simple YAML configurations.
-- **Scenario-Based Testing:** Run agents through diverse coding tasks (API implementation, debugging, refactoring, etc.).
-- **Statistical Reporting:** Generate detailed Markdown reports with statistical significance flags (Welch's t-test, Fisher's Exact test).
-- **Extensible Architecture:** Easily add new tools, scenarios, and evaluation metrics.
+While designed with the [Gemini CLI](https://github.com/google/gemini-cli) in mind, Tenkai's architecture is agent-agnostic. With minimal adaptations, it can be used to evaluate any headless coding agent.
 
 ## Getting Started
 
 ### Prerequisites
 
 - [Go](https://golang.org/doc/install) (1.21+)
-- [Gemini CLI](https://github.com/google/gemini-cli) (properly configured with API keys)
-- Specialized MCP tools (e.g., `godoctor`) if using them in scenarios.
+- [Gemini CLI](https://github.com/google/gemini-cli) (properly configured)
 
 ### Installation
 
+For quick usage:
+```bash
+go install github.com/danicat/tenkai/cmd/tenkai@latest
+```
+
+Or build from source:
 ```bash
 git clone https://github.com/danicat/tenkai.git
 cd tenkai
-go build ./cmd/tenkai
+go build ./cmd/tenkai/main.go
 ```
 
-### Running an Experiment
+### Running Your First Experiment
+
+Use the included minimal example to verify your setup:
+```bash
+./tenkai -config studies/_example/config.yaml
+```
+
+## Dashboard (Frontend)
+
+Tenkai includes a high-performance dashboard for managing experiments and visualizing results.
 
 ```bash
-./tenkai -config configs/your-experiment.yaml
+cd frontend
+npm install
+npm run dev
+```
+Available at `http://localhost:3000`.
+
+## Using with Jules
+
+[Jules](https://jules.google) can effectively orchestrate Tenkai to optimize overall agentic performance. You can instruct Jules to:
+- "Initialize a Tenkai experiment using `studies/_example/config.yaml`."
+- "Create a new coding scenario that tests the agent's ability to refactor legacy Java code."
+- "Analyze the latest Tenkai run and suggest a better system prompt to improve success rates."
+
+## Scenarios
+
+### Creating a New Scenario
+1. Create a directory in the global `templates/` (shared) or in a study's local `templates/` (specific).
+2. Add a `PROMPT.md` describing the task.
+3. (Optional) Add starter code/files in the same directory.
+
+Tenkai will look for scenarios in the study's `templates/` directory first, then fallback to the global `templates/`.
+
+## Configuration (YAML)
+
+```yaml
+name: "experiment_name"
+repetitions: 10
+max_concurrent: 5
+timeout: "5m"
+
+alternatives:
+  - name: "control"
+    command: "..."
+    args: ["..."]
+    system_prompt_file: "..." # Optional path to prompt md
+    settings_path: "..."      # Optional path to settings.json
+
+scenarios:
+  - name: "scenario_name"      # Found in study or global templates/
 ```
 
-## Contributing
+## Statistical Validity
 
-We welcome contributions! Please see our guidelines for more information.
-
-## License
-
-Apache 2.0
+Tenkai uses **Welch's t-test** for duration/tokens and **Fisher's Exact Test** for success rates to provide p-values and significance flags (`*`, `**`).
 
 ---
-
 > [!IMPORTANT]
-> **Tenkai is not an officially supported Google product.** It is a research and experimentation framework developed for testing model behaviors.
+> **Tenkai is not an officially supported Google product.**

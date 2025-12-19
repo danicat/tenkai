@@ -9,15 +9,15 @@ import (
 
 // Manager handles the creation and setup of isolated workspaces for experiments.
 type Manager struct {
-	BasePath     string
-	TemplatesDir string
+	BasePath      string
+	TemplatesDirs []string
 }
 
 // New creates a new Workspace Manager.
-func New(basePath, templatesDir string) *Manager {
+func New(basePath string, templatesDirs ...string) *Manager {
 	return &Manager{
-		BasePath:     basePath,
-		TemplatesDir: templatesDir,
+		BasePath:      basePath,
+		TemplatesDirs: templatesDirs,
 	}
 }
 
@@ -31,7 +31,19 @@ func (m *Manager) PrepareWorkspace(experimentDir, alternative, scenario string, 
 	}
 
 	// Copy template content
-	tmplPath := filepath.Join(m.TemplatesDir, scenario)
+	var tmplPath string
+	for _, dir := range m.TemplatesDirs {
+		path := filepath.Join(dir, scenario)
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			tmplPath = path
+			break
+		}
+	}
+
+	if tmplPath == "" {
+		return "", fmt.Errorf("scenario template %q not found in any of: %v", scenario, m.TemplatesDirs)
+	}
+
 	if err := copyDir(tmplPath, wsPath); err != nil {
 		return "", fmt.Errorf("failed to copy template from %s to %s: %w", tmplPath, wsPath, err)
 	}

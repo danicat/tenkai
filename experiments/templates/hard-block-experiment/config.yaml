@@ -1,0 +1,58 @@
+name: block_default_tools
+description: >
+  Forcing MCP tools by excluding read/write/replace. This experiment tests if
+  hard technical barriers (tool exclusion) can force  tool selection even when
+  the system prompt might lean towards standard tools.
+repetitions: 10
+max_concurrent: 5
+timeout: 5m
+alternatives:
+  - name: default
+    description: |
+      Standard system prompt and tools
+    command: gemini
+    args:
+      - '--output-format'
+      - stream-json
+      - '--yolo'
+      - '--model'
+      - gemini-2.5-flash
+    system_prompt_file: prompts/SYSTEM_DEFAULT.md
+    settings_path: settings.json
+  - name: default_godoctor_blocked
+    description: |
+      Standard system prompt + Forced MCP
+    command: gemini
+    args:
+      - '--output-format'
+      - stream-json
+      - '--yolo'
+      - '--model'
+      - gemini-2.5-flash
+    system_prompt_file: prompts/SYSTEM_DEFAULT.md
+    settings_path: settings-force-mcp.json
+  - name: go_godoctor_blocked
+    description: |
+      Standard system prompt +GoDoctor prompt + Forced MCP
+    command: gemini
+    args:
+      - '--output-format'
+      - stream-json
+      - '--yolo'
+      - '--model'
+      - gemini-2.5-flash
+    system_prompt_file: prompts/SYSTEM_DEFAULT_GODOCTOR.md
+    settings_path: settings-force-mcp.json
+scenarios:
+  - name: api_implementation
+    description: >-
+      Build an API while core read/write tools are blocked, forcing reliance on
+      specialized MCP tools.
+  - name: greenfield_cli
+    description: >-
+      Bootstrap a CLI framework using only alternate toolpaths and high-level
+      architectural knowledge.
+  - name: legacy_refactor
+    description: >-
+      Refactor code structure while standard 'replace' tools are restricted,
+      testing surgical precision.

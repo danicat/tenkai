@@ -27,7 +27,7 @@ type Indexer struct {
 // NewIndexer creates a new Indexer for the given root directory.
 func NewIndexer(rootDir string) *Indexer {
 	return &Indexer{
-		indexPath: filepath.Join(rootDir, "experiments", "index.json"),
+		indexPath: filepath.Join(rootDir, "studies", "index.json"),
 	}
 }
 
@@ -44,6 +44,32 @@ func (i *Indexer) AddEntry(record ExperimentRecord) error {
 	entries, _ := i.loadEntries()
 
 	entries = append(entries, record)
+
+	return i.saveEntries(entries)
+}
+
+// UpdateStatus updates the status of an existing entry looking it up by its results path.
+func (i *Indexer) UpdateStatus(resultsPath string, status string) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	entries, err := i.loadEntries()
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for idx := range entries {
+		if entries[idx].ResultsPath == resultsPath {
+			entries[idx].Status = status
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		return fmt.Errorf("record with results path %s not found", resultsPath)
+	}
 
 	return i.saveEntries(entries)
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,11 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/danicat/tenkai/internal/config"
+	"github.com/danicat/tenkai/internal/db"
 	"github.com/danicat/tenkai/internal/parser"
 	"github.com/danicat/tenkai/internal/workspace"
 )
@@ -25,7 +28,8 @@ type EvaluationMetrics struct {
 	TestsPassed int
 	TestsFailed int
 	LintIssues  int
-	LintDetails map[string]int // Category/Message -> Count
+	Tests       []db.TestResult
+	Lints       []db.LintIssue
 }
 
 // Result represents the outcome of a single experiment run.
@@ -42,12 +46,15 @@ type Result struct {
 
 	AgentMetrics      *parser.AgentMetrics `json:"agent_metrics,omitempty"`
 	EvaluationMetrics *EvaluationMetrics   `json:"evaluation_metrics,omitempty"`
+	GeneratedFiles    []db.RunFile         `json:"generated_files,omitempty"`
 }
 
 // Runner handles the execution of experiments.
 type Runner struct {
 	WorkspaceMgr  *workspace.Manager
 	MaxConcurrent int
+	db            *db.DB
+	experimentID  int64
 }
 
 // New creates a new Runner.
@@ -68,6 +75,23 @@ func New(wsMgr *workspace.Manager, maxConcurrent int) *Runner {
 	}
 }
 
+func (r *Runner) SetDB(d *db.DB) {
+	r.db = d
+}
+
+func (r *Runner) SetExperimentID(id int64) {
+	r.experimentID = id
+}
+
+// Checkpoint represents the current progress of an experiment.
+type Checkpoint struct {
+	TotalJobs     int     `json:"total_jobs"`
+	CompletedJobs int     `json:"completed_jobs"`
+	Percentage    float64 `json:"percentage"`
+	LastUpdate    string  `json:"last_update"`
+	Status        string  `json:"status"`
+}
+
 // Run executes the experiments defined in the configuration.
 func (r *Runner) Run(ctx context.Context, cfg *config.Configuration, timestamp time.Time, experimentDir string) ([]Result, error) {
 	var results []Result
@@ -82,6 +106,16 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Configuration, timestamp t
 
 	sem := make(chan struct{}, r.MaxConcurrent)
 	var wg sync.WaitGroup
+
+	// Wrap context with cancellation for stopping
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Initial checkpoint
+	if r.db != nil && r.experimentID != 0 {
+		r.db.UpdateExperimentProgress(r.experimentID, 0, resultsLimit)
+		r.db.UpdateExperimentStatus(r.experimentID, "running")
+	}
 
 	// Parse timeout from config
 	timeout := 5 * time.Minute
@@ -99,8 +133,26 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Configuration, timestamp t
 				wg.Add(1)
 				go func(alt config.Alternative, scen config.Scenario, rep int) {
 					defer wg.Done()
-					sem <- struct{}{}
-					defer func() { <-sem }()
+
+					// Check for stop/pause BEFORE acquiring semaphore
+					for {
+						action := r.checkAction(experimentDir)
+						if action == "stop" {
+							return
+						}
+						if action == "pause" {
+							time.Sleep(1 * time.Second)
+							continue
+						}
+						break
+					}
+
+					select {
+					case sem <- struct{}{}:
+						defer func() { <-sem }()
+					case <-ctx.Done():
+						return
+					}
 
 					res := r.runSingle(ctx, timestamp, cfg.Name, alt, scen, rep, experimentDir, timeout)
 					resultsChan <- res
@@ -115,16 +167,140 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Configuration, timestamp t
 	}()
 
 	completed := 0
-	for res := range resultsChan {
-		completed++
-		if completed%10 == 0 || completed == resultsLimit {
+	for {
+		select {
+		case res, ok := <-resultsChan:
+			if !ok {
+				goto Done
+			}
+			completed++
 			percentage := float64(completed) / float64(resultsLimit) * 100
 			log.Printf("Progress: %d/%d jobs completed (%.1f%%)", completed, resultsLimit, percentage)
+			if r.db != nil && r.experimentID != 0 {
+				runRes := &db.RunResult{
+					ExperimentID: r.experimentID,
+					Alternative:  res.Alternative,
+					Scenario:     res.Scenario,
+					Repetition:   res.Repetition,
+					Duration:     int64(res.Duration),
+					Error:        res.ErrorStr,
+					Stdout:       res.Stdout,
+					Stderr:       res.Stderr,
+				}
+				if res.EvaluationMetrics != nil {
+					runRes.TestsPassed = res.EvaluationMetrics.TestsPassed
+					runRes.TestsFailed = res.EvaluationMetrics.TestsFailed
+					runRes.LintIssues = res.EvaluationMetrics.LintIssues
+				}
+				if res.AgentMetrics != nil {
+					runRes.TotalTokens = res.AgentMetrics.TotalTokens
+					runRes.InputTokens = res.AgentMetrics.InputTokens
+					runRes.OutputTokens = res.AgentMetrics.OutputTokens
+					runRes.ToolCallsCount = len(res.AgentMetrics.ToolCalls)
+					runRes.LoopDetected = res.AgentMetrics.LoopDetected
+				}
+
+				// 1. Save Run Result (returns ID for FKs)
+				runID, err := r.db.SaveRunResult(runRes)
+				if err != nil {
+					log.Printf("Warning: failed to save run result to DB: %v", err)
+				} else if res.AgentMetrics != nil {
+					// 2. Save Tool Usage
+					for _, tc := range res.AgentMetrics.ToolCalls {
+						tu := &db.ToolUsage{
+							RunID:     runID,
+							Name:      tc.Name,
+							Args:      tc.Args,
+							Status:    tc.Status,
+							Output:    tc.Output,
+							Error:     tc.Error,
+							Duration:  int64(tc.Duration),
+							Timestamp: tc.Timestamp,
+						}
+						if err := r.db.SaveToolUsage(tu); err != nil {
+							log.Printf("Warning: failed to save tool usage: %v", err)
+						}
+					}
+					// 3. Save Messages
+					for _, m := range res.AgentMetrics.Messages {
+						msg := &db.Message{
+							RunID:     runID,
+							Role:      m.Role,
+							Content:   m.Content,
+							Timestamp: m.Timestamp,
+						}
+						if err := r.db.SaveMessage(msg); err != nil {
+							log.Printf("Warning: failed to save message: %v", err)
+						}
+					}
+
+					// 5. Save Detailed Evaluation
+					if res.EvaluationMetrics != nil {
+						for i := range res.EvaluationMetrics.Tests {
+							res.EvaluationMetrics.Tests[i].RunID = runID
+						}
+						if err := r.db.SaveTestResults(res.EvaluationMetrics.Tests); err != nil {
+							log.Printf("Warning: failed to save test results: %v", err)
+						}
+
+						for i := range res.EvaluationMetrics.Lints {
+							res.EvaluationMetrics.Lints[i].RunID = runID
+						}
+						if err := r.db.SaveLintResults(res.EvaluationMetrics.Lints); err != nil {
+							log.Printf("Warning: failed to save lint results: %v", err)
+						}
+					}
+				}
+				r.db.UpdateExperimentProgress(r.experimentID, completed, resultsLimit)
+			}
+			results = append(results, res)
+		case <-time.After(1 * time.Second):
+			// Periodically check for STOP signal from DB to cancel context
+			action := r.checkAction(experimentDir)
+			if action == "stop" {
+				cancel()
+				// Drain channel
+				for range resultsChan {
+				}
+				goto Done
+			}
+			if action == "pause" {
+				if r.db != nil && r.experimentID != 0 {
+					r.db.UpdateExperimentStatus(r.experimentID, "paused")
+				}
+			} else if action == "resume" {
+				if r.db != nil && r.experimentID != 0 {
+					r.db.UpdateExperimentStatus(r.experimentID, "running")
+				}
+			}
 		}
-		results = append(results, res)
+	}
+
+Done:
+	// Final checkpoint
+	finalStatus := "completed"
+	if r.checkAction(experimentDir) == "stop" {
+		finalStatus = "stopped"
+	}
+	if r.db != nil && r.experimentID != 0 {
+		r.db.UpdateExperimentProgress(r.experimentID, completed, resultsLimit)
+		r.db.UpdateExperimentStatus(r.experimentID, finalStatus)
 	}
 
 	return results, nil
+}
+
+func (r *Runner) checkAction(experimentDir string) string {
+	if r.db == nil || r.experimentID == 0 {
+		return ""
+	}
+	exp, err := r.db.GetExperimentByID(r.experimentID)
+	if err != nil {
+		log.Printf("Warning: failed to get experiment from DB for ID %d: %v", r.experimentID, err)
+		return ""
+	}
+
+	return exp.Control
 }
 
 func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentName string, alt config.Alternative, scen config.Scenario, rep int, experimentDir string, timeout time.Duration) Result {
@@ -248,7 +424,7 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 		res.ErrorStr = res.Error.Error()
 		return res
 	}
-	defer logFile.Close()
+	// Note: explicitly closing below before parsing
 
 	cmd.Stdout = logFile
 	// Capture Stderr to file to avoid "zombie pipe" blocking
@@ -259,7 +435,7 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 		res.ErrorStr = res.Error.Error()
 		return res
 	}
-	defer stderrFile.Close()
+	// Note: explicitly closing below
 
 	cmd.Stderr = stderrFile
 
@@ -277,7 +453,11 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 	res.Duration = time.Since(start)
 	res.Stdout = "" // stdout is in file
 
-	// Read stderr content for result struct (limited size if needed, but full file is on disk)
+	// Close files to ensure they are flushed and readable by parser
+	logFile.Close()
+	stderrFile.Close()
+
+	// Read stderr content for result struct
 	stderrBytes, _ := os.ReadFile(stderrPath)
 	res.Stderr = string(stderrBytes)
 
@@ -287,7 +467,7 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 	if err == nil {
 		res.AgentMetrics = metrics
 	} else {
-		// Maybe not stream-json output?
+		log.Printf("Warning: failed to parse metrics from %s: %v", logPath, err)
 	}
 
 	// 5. Verify Code (Test & Lint) - skip for timeouts since code is incomplete
@@ -301,76 +481,187 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 		res.EvaluationMetrics = r.evaluateCode(ctx, wsPath)
 	}
 
+	// 6. Snapshot Workspace Files
+	res.GeneratedFiles = r.captureFiles(wsPath)
+
 	log.Printf("DONE  %s in %s", jobID, res.Duration.Round(time.Millisecond))
+	// Result will be saved to DB in the main Run loop
 	return res
 }
 
-func (r *Runner) evaluateCode(ctx context.Context, wsPath string) *EvaluationMetrics {
-	eval := &EvaluationMetrics{
-		LintDetails: make(map[string]int),
-	}
+func (r *Runner) captureFiles(wsPath string) []db.RunFile {
+	var files []db.RunFile
+	err := filepath.Walk(wsPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
 
-	// Run Tests
-	// go test -v ./...
-	testCmd := exec.CommandContext(ctx, "go", "test", "-v", "./...")
+		// Skip hidden files/dirs like .gemini, .git
+		rel, _ := filepath.Rel(wsPath, path)
+		parts := strings.Split(rel, string(filepath.Separator))
+		for _, p := range parts {
+			if strings.HasPrefix(p, ".") {
+				return nil
+			}
+		}
+
+		// Skip PROMPT.md (it's internal)
+		if rel == "PROMPT.md" {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("Warning: failed to read file %s for snapshot: %v", path, err)
+			return nil
+		}
+
+		files = append(files, db.RunFile{
+			Path:        rel,
+			Content:     string(content),
+			IsGenerated: true, // For now assuming everything not skipped is generated or relevant
+		})
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Warning: failed to walk workspace for snapshot: %v", err)
+	}
+	return files
+}
+
+func (r *Runner) evaluateCode(ctx context.Context, wsPath string) *EvaluationMetrics {
+	eval := &EvaluationMetrics{}
+
+	// 1. Run Tests with JSON output
+	// go test -json ./...
+	testCmd := exec.CommandContext(ctx, "go", "test", "-json", "./...")
 	testCmd.Dir = wsPath
 	var testOut bytes.Buffer
 	testCmd.Stdout = &testOut
-	testCmd.Stderr = &testOut
-	_ = testCmd.Run() // verify error handled by parsing output
+	_ = testCmd.Run()
 
-	// Poor man's output parsing for tests
-	output := testOut.String()
-	if strings.Contains(output, "FAIL") {
-		// Rough count of failures?
-		// For now simple pass/fail of the whole suite
-		if err := testCmd.ProcessState.ExitCode(); err != 0 {
-			eval.TestsFailed = 1
-		} else {
-			eval.TestsPassed = 1
+	// Parse JSON test output
+	// Each line is a JSON object: {"Time":"...","Action":"...","Package":"...","Test":"...","Output":"...","Elapsed":...}
+	scanner := bufio.NewScanner(strings.NewReader(testOut.String()))
+	testMap := make(map[string]*db.TestResult)
+	for scanner.Scan() {
+		var entry struct {
+			Action  string
+			Test    string
+			Output  string
+			Elapsed float64
 		}
-	} else if strings.Contains(output, "PASS") {
-		eval.TestsPassed = 1
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			continue
+		}
+		if entry.Test == "" {
+			continue
+		}
+
+		res, ok := testMap[entry.Test]
+		if !ok {
+			res = &db.TestResult{Name: entry.Test}
+			testMap[entry.Test] = res
+		}
+
+		switch entry.Action {
+		case "pass":
+			res.Status = "PASS"
+			res.DurationNS = int64(entry.Elapsed * 1e9)
+		case "fail":
+			res.Status = "FAIL"
+			res.DurationNS = int64(entry.Elapsed * 1e9)
+		case "output":
+			res.Output += entry.Output
+		case "skip":
+			res.Status = "SKIP"
+		}
+	}
+	for _, res := range testMap {
+		eval.Tests = append(eval.Tests, *res)
+		if res.Status == "PASS" {
+			eval.TestsPassed++
+		} else if res.Status == "FAIL" {
+			eval.TestsFailed++
+		}
 	}
 
-	// Run Linter
-	// golangci-lint run ./...
-	// We assume golangci-lint is installed. If not, maybe use go vet?
-	// Let's try golangci-lint, if it fails, fallback to go vet.
-	lintCmd := exec.CommandContext(ctx, "golangci-lint", "run", "./...")
+	// 2. Run Linter with JSON output
+	// golangci-lint run --out-format json ./...
+	lintCmd := exec.CommandContext(ctx, "golangci-lint", "run", "--out-format", "json", "./...")
 	lintCmd.Dir = wsPath
 	var lintOut bytes.Buffer
 	lintCmd.Stdout = &lintOut
 	if err := lintCmd.Run(); err != nil {
-		// Lint issues found (exit code != 0) OR command not found
 		if strings.Contains(err.Error(), "executable file not found") {
-			// Fallback to go vet
-			lintCmd = exec.CommandContext(ctx, "go", "vet", "./...")
-			lintCmd.Dir = wsPath
-			lintOut.Reset()
-			lintCmd.Stdout = &lintOut
-			lintCmd.Stderr = &lintOut // vet writes to stderr
-			_ = lintCmd.Run()
+			// Fallback to go vet (non-json unfortunately, but we'll try to parse it)
+			r.runGoVet(ctx, wsPath, eval)
+		} else {
+			// golangci-lint found issues, parse JSON
+			r.parseGolangciJSON(lintOut.Bytes(), eval)
 		}
+	} else {
+		// No issues or json output anyway
+		r.parseGolangciJSON(lintOut.Bytes(), eval)
 	}
 
-	// Parse Lint Output
-	// Format is usually "file:line:col: message (category)"
-	scanner := bufio.NewScanner(strings.NewReader(lintOut.String()))
+	eval.LintIssues = len(eval.Lints)
+	return eval
+}
+
+func (r *Runner) parseGolangciJSON(data []byte, eval *EvaluationMetrics) {
+	var report struct {
+		Issues []struct {
+			FromLinter string `json:"FromLinter"`
+			Text       string `json:"Text"`
+			Pos        struct {
+				Filename string `json:"Filename"`
+				Line     int    `json:"Line"`
+				Column   int    `json:"Column"`
+			} `json:"Pos"`
+		} `json:"Issues"`
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		return
+	}
+	for _, iss := range report.Issues {
+		eval.Lints = append(eval.Lints, db.LintIssue{
+			File:    iss.Pos.Filename,
+			Line:    iss.Pos.Line,
+			Col:     iss.Pos.Column,
+			Message: iss.Text,
+			RuleID:  iss.FromLinter,
+		})
+	}
+}
+
+func (r *Runner) runGoVet(ctx context.Context, wsPath string, eval *EvaluationMetrics) {
+	cmd := exec.CommandContext(ctx, "go", "vet", "./...")
+	cmd.Dir = wsPath
+	var out bytes.Buffer
+	cmd.Stderr = &out // vet writes to stderr
+	_ = cmd.Run()
+
+	scanner := bufio.NewScanner(strings.NewReader(out.String()))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.TrimSpace(line) == "" {
+		// Format: file:line:col: message
+		parts := strings.SplitN(line, ":", 4)
+		if len(parts) < 4 {
 			continue
 		}
-		// Simple heuristic: count lines that look like errors
-		if strings.Contains(line, ".go:") {
-			eval.LintIssues++
-			// Extract category if possible? golangci-lint output varies.
-			// Just use the line as key for now to dedup?
-			// Use simple "issue" category
-			eval.LintDetails["issue"]++
-		}
+		ln, _ := strconv.Atoi(parts[1])
+		col, _ := strconv.Atoi(parts[2])
+		eval.Lints = append(eval.Lints, db.LintIssue{
+			File:    parts[0],
+			Line:    ln,
+			Col:     col,
+			Message: strings.TrimSpace(parts[3]),
+			RuleID:  "go vet",
+		})
 	}
-
-	return eval
 }

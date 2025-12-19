@@ -1,18 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/danicat/tenkai/internal/config"
-	"github.com/danicat/tenkai/internal/history"
+	"github.com/danicat/tenkai/internal/db"
 	"github.com/danicat/tenkai/internal/report"
 	"github.com/danicat/tenkai/internal/runner"
 	"github.com/danicat/tenkai/internal/workspace"
@@ -22,7 +25,10 @@ func main() {
 	configPath := flag.String("config", "", "Path to configuration file")
 	repsFlag := flag.Int("reps", 0, "Override number of repetitions")
 	concurrentFlag := flag.Int("concurrent", 0, "Override max concurrent workers")
-	reportOnlyPath := flag.String("report-only", "", "Path to experiment directory to regenerate report for")
+	nameFlag := flag.String("name", "", "Override experiment name")
+	altsFlag := flag.String("alternatives", "", "Comma-separated list of alternatives to run")
+	scensFlag := flag.String("scenarios", "", "Comma-separated list of scenarios to run")
+	experimentID := flag.Int64("experiment-id", 0, "Experiment ID to regenerate report or resume")
 	fixReportPath := flag.String("fix-report", "", "Path to existing report.md to fix structure/formatting")
 	flag.Parse()
 
@@ -36,8 +42,8 @@ func main() {
 	}
 
 	// Handle Report-Only Mode
-	if *reportOnlyPath != "" {
-		handleReportOnly(*reportOnlyPath)
+	if *experimentID > 0 && flag.NArg() == 0 && *configPath == "" {
+		handleReportOnly(*experimentID)
 		return
 	}
 
@@ -46,11 +52,19 @@ func main() {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
+	// 0. Initialize Database
+	dbPath := filepath.Join(cwd, "experiments", "tenkai.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	defer database.Close()
+
 	if *configPath == "" {
 		// Try to find a default config? No, explicit is better.
-		// But we can suggest looking in configs/
+		// But we can suggest looking in studies/
 		fmt.Println("Usage: tenkai --config <path_to_config_yaml> [options]")
-		fmt.Printf("Tip: Check 'configs/' directory for examples, e.g., --config configs/run-simple.yaml\n")
+		fmt.Printf("Tip: Check 'experiments/templates/' directory for examples\n")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -64,12 +78,62 @@ func main() {
 	// Apply CLI overrides
 	var overrideNotes []string
 	if *repsFlag > 0 {
-		overrideNotes = append(overrideNotes, fmt.Sprintf("⚠️ Repetitions overridden to %d via CLI (config: %d)", *repsFlag, cfg.Repetitions))
+		if *repsFlag != cfg.Repetitions {
+			overrideNotes = append(overrideNotes, fmt.Sprintf("⚠️ Repetitions overridden to %d via CLI (config: %d)", *repsFlag, cfg.Repetitions))
+		}
 		cfg.Repetitions = *repsFlag
 	}
 	if *concurrentFlag > 0 {
-		overrideNotes = append(overrideNotes, fmt.Sprintf("⚠️ Max concurrent workers overridden to %d via CLI (config: %d)", *concurrentFlag, cfg.MaxConcurrent))
+		if *concurrentFlag != cfg.MaxConcurrent {
+			overrideNotes = append(overrideNotes, fmt.Sprintf("⚠️ Max concurrent workers overridden to %d via CLI (config: %d)", *concurrentFlag, cfg.MaxConcurrent))
+		}
 		cfg.MaxConcurrent = *concurrentFlag
+	}
+	if *nameFlag != "" {
+		cfg.Name = *nameFlag
+	}
+
+	// Apply Filters
+	if *altsFlag != "" {
+		alts := strings.Split(*altsFlag, ",")
+		var filtered []config.Alternative
+		for _, name := range alts {
+			name = strings.TrimSpace(name)
+			for _, a := range cfg.Alternatives {
+				if a.Name == name {
+					filtered = append(filtered, a)
+					break
+				}
+			}
+		}
+		if len(filtered) > 0 {
+			// Only report if we actually filtered something out
+			if len(filtered) < len(cfg.Alternatives) {
+				overrideNotes = append(overrideNotes, fmt.Sprintf("🎯 Alternatives filtered to: %s", *altsFlag))
+			}
+			cfg.Alternatives = filtered
+		}
+	}
+
+	if *scensFlag != "" {
+		scens := strings.Split(*scensFlag, ",")
+		var filtered []config.Scenario
+		for _, name := range scens {
+			name = strings.TrimSpace(name)
+			for _, s := range cfg.Scenarios {
+				if s.Name == name {
+					filtered = append(filtered, s)
+					break
+				}
+			}
+		}
+		if len(filtered) > 0 {
+			// Only report if we actually filtered something out
+			if len(filtered) < len(cfg.Scenarios) {
+				overrideNotes = append(overrideNotes, fmt.Sprintf("🎯 Scenarios filtered to: %s", *scensFlag))
+			}
+			cfg.Scenarios = filtered
+		}
 	}
 
 	// 2. Prepare Output Directory
@@ -80,143 +144,179 @@ func main() {
 		folderName = fmt.Sprintf("%s_%s", tsStr, cfg.Name)
 	}
 
-	// NEW STRUCTURE: experiments/runs/<timestamp>_...
+	// Determine experiment directory: <cwd>/experiments/runs/<folderName>
 	experimentDir := filepath.Join(cwd, "experiments", "runs", folderName)
 	if err := os.MkdirAll(experimentDir, 0755); err != nil {
 		log.Fatalf("Failed to create experiment dir: %v", err)
 	}
 
-	// NEW: Copy Config to Output Dir
+	// NEW: Marshal Effective Config to YAML
+	effectiveConfigData, err := yaml.Marshal(cfg)
+	if err != nil {
+		log.Fatalf("Failed to marshal effective config: %v", err)
+	}
+
+	// Save Config to Output Dir
 	destConfigPath := filepath.Join(experimentDir, "config.yaml")
-	if err := copyFile(*configPath, destConfigPath); err != nil {
-		log.Printf("Warning: failed to copy config file: %v", err)
+	if err := os.WriteFile(destConfigPath, effectiveConfigData, 0644); err != nil {
+		log.Printf("Warning: failed to write config file: %v", err)
 	} else {
-		// If we had overrides, maybe valid to append them to the copied yaml as comments?
-		// For now simple copy is fine.
 		fmt.Printf("Configuration saved to: %s\n", destConfigPath)
 	}
 
 	// 3. Initialize Dependencies
-	templatesDir := filepath.Join(cwd, "templates")
-	wsMgr := workspace.New(cwd, templatesDir)
+	scenariosDir := filepath.Join(cwd, "scenarios")
+	// Legacy support removed, we only look in scenarios/ now
+
+	// Search in scenariosDir
+	wsMgr := workspace.New(cwd, scenariosDir, scenariosDir)
 
 	r := runner.New(wsMgr, cfg.MaxConcurrent)
+	r.SetDB(database) // Inject DB into runner
 
-	// 4. Run Experiments
+	// 4. Register Experiment in DB (Initial status: running)
+	expRecord := &db.Experiment{
+		Timestamp:     timestamp,
+		Name:          cfg.Name,
+		ConfigPath:    destConfigPath,
+		Status:        "running",
+		Reps:          cfg.Repetitions,
+		Concurrent:    cfg.MaxConcurrent,
+		Description:   cfg.Description,
+		ConfigContent: string(effectiveConfigData),
+	}
+
+	expID, err := database.CreateExperiment(expRecord)
+	if err != nil {
+		log.Printf("Warning: failed to register experiment in DB: %v", err)
+	}
+	r.SetExperimentID(expID) // Set ID for result correlation
+
+	// 5. Run Experiments
 	fmt.Printf("Starting Tenkai experiment with %d repetition(s) and %d concurrent worker(s)...\n", cfg.Repetitions, cfg.MaxConcurrent)
 	fmt.Printf("Output Directory: %s\n", experimentDir)
 
-	results, err := r.Run(context.Background(), cfg, timestamp, experimentDir) // Pass experimentDir for logging
+	results, err := r.Run(context.Background(), cfg, timestamp, experimentDir)
 	if err != nil {
+		database.UpdateExperimentStatus(expID, "failed")
 		log.Fatalf("Experiment run failed: %v", err)
 	}
 
 	duration := time.Since(timestamp)
 	fmt.Printf("\nExperiment completed in %s.\n", duration.Round(time.Millisecond))
 
-	// 5. Save Results to JSON (before report)
-	resultsPath := filepath.Join(experimentDir, "results.json")
-	if file, err := os.Create(resultsPath); err == nil {
-		encoder := json.NewEncoder(file)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(results); err != nil {
-			log.Printf("Warning: failed to write results.json: %v", err)
-		}
-		file.Close()
-		fmt.Printf("\nRaw results saved to: %s\n", resultsPath)
-	} else {
-		log.Printf("Warning: failed to create results.json: %v", err)
+	// Update DB with duration
+	if err := database.UpdateExperimentDuration(expID, int64(duration)); err != nil {
+		log.Printf("Warning: failed to update experiment duration: %v", err)
 	}
 
-	fmt.Println("All jobs processed. Generating report...")
+	fmt.Println("All jobs processed. Analytics available in Dashboard.")
 
-	// 6. Generate Report
+	// 7. Generate & Save Report (both console and markdown for DB)
 	rep := report.New(results, os.Stdout, cfg, overrideNotes)
-
 	println("\n--- Results ---")
 	rep.GenerateConsoleReport()
 
-	reportPath := filepath.Join(experimentDir, "report.md")
-	if err := rep.GenerateMarkdownReport(reportPath); err != nil {
-		log.Printf("Failed to generate markdown report: %v", err)
-	} else {
-		fmt.Printf("\nDetailed report generated at: %s\n", reportPath)
-	}
-
-	// 7. Update Index
-	idx := history.NewIndexer(cwd)
-	record := history.ExperimentRecord{
-		Timestamp:   timestamp.Format(time.RFC3339),
-		Name:        cfg.Name,
-		ConfigPath:  destConfigPath, // Point to the reproducible copy
-		ResultsPath: resultsPath,
-		ReportPath:  reportPath,
-		Status:      "completed", // TODO: Detect failure
-	}
-	if err := idx.AddEntry(record); err != nil {
-		log.Printf("Warning: failed to update experiment index: %v", err)
-	}
-}
-
-func handleReportOnly(experimentDir string) {
-	fmt.Printf("Regenerating report for: %s\n", experimentDir)
-
-	resultsPath := filepath.Join(experimentDir, "results.json")
-	file, err := os.Open(resultsPath)
-	if err != nil {
-		log.Fatalf("Failed to open results.json: %v", err)
-	}
-	defer file.Close()
-
-	var results []runner.Result
-	if err := json.NewDecoder(file).Decode(&results); err != nil {
-		log.Fatalf("Failed to decode results.json: %v", err)
-	}
-
-	// Rehydrate error interface from ErrorStr
-	for i := range results {
-		if results[i].ErrorStr != "" {
-			results[i].Error = fmt.Errorf("%s", results[i].ErrorStr)
+	var buf bytes.Buffer
+	if err := rep.GenerateMarkdown(&buf); err == nil {
+		if err := database.UpdateExperimentReport(expID, buf.String()); err != nil {
+			log.Printf("Warning: failed to save report to DB: %v", err)
 		}
 	}
 
-	// Try to load config if it exists (optional, mostly for display)
-	// We'll use a dummy config if not found
-	cfg := &config.Configuration{}
+	// 8. Finalize Status in DB (Runner already does this, but we ensure it's synced)
+	finalStatus := "completed"
 
-	// NEW: Check for config.yaml in the experiment dir first
-	localConfigPath := filepath.Join(experimentDir, "config.yaml")
-	if loadedCfg, err := config.Load(localConfigPath); err == nil {
-		cfg = loadedCfg
-		fmt.Printf("Loaded original config from %s\n", localConfigPath)
-	}
-
-	rep := report.New(results, os.Stdout, cfg, []string{"Report regenerated from results.json"})
-
-	println("\n--- Results ---")
-	rep.GenerateConsoleReport()
-
-	reportPath := filepath.Join(experimentDir, "report_regenerated.md")
-	if err := rep.GenerateMarkdownReport(reportPath); err != nil {
-		log.Printf("Failed to generate markdown report: %v", err)
-	} else {
-		fmt.Printf("\nDetailed report generated at: %s\n", reportPath)
+	if err := database.UpdateExperimentStatus(expID, finalStatus); err != nil {
+		log.Printf("Warning: failed to finalize experiment status in DB: %v", err)
 	}
 }
 
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
+func handleReportOnly(expID int64) {
+	fmt.Printf("Regenerating report for Experiment ID: %d\n", expID)
 
-	destFile, err := os.Create(dst)
+	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		log.Fatalf("Failed to get current working directory: %v", err)
 	}
-	defer destFile.Close()
 
-	_, err = io.Copy(destFile, sourceFile)
-	return err
+	// 0. Initialize Database
+	dbPath := filepath.Join(cwd, "experiments", "tenkai.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	defer database.Close()
+
+	// 1. Resolve Experiment
+	exp, err := database.GetExperimentByID(expID)
+	if err != nil {
+		log.Fatalf("Failed to find experiment in DB for ID %d: %v", expID, err)
+	}
+
+	fmt.Printf("Found Experiment Name: %s\n", exp.Name)
+
+	// 2. Fetch Results from DB
+	dbResults, err := database.GetRunResults(exp.ID)
+	if err != nil {
+		log.Fatalf("Failed to fetch run results from DB: %v", err)
+	}
+
+	// 3. Convert DB Results to Runner Results
+	var results []runner.Result
+	for _, r := range dbResults {
+		var res runner.Result
+		if r.RawJSON != "" {
+			if err := json.Unmarshal([]byte(r.RawJSON), &res); err != nil {
+				log.Printf("Warning: failed to unmarshal RawJSON for run %d: %v", r.ID, err)
+				// Fallback to manual population of basic fields
+				res = runner.Result{
+					Alternative: r.Alternative,
+					Scenario:    r.Scenario,
+					Repetition:  r.Repetition,
+					Duration:    time.Duration(r.Duration),
+					ErrorStr:    r.Error,
+					EvaluationMetrics: &runner.EvaluationMetrics{
+						TestsPassed: r.TestsPassed,
+						TestsFailed: r.TestsFailed,
+						LintIssues:  r.LintIssues,
+					},
+				}
+			}
+		} else {
+			// Legacy record without RawJSON
+			res = runner.Result{
+				Alternative: r.Alternative,
+				Scenario:    r.Scenario,
+				Repetition:  r.Repetition,
+				Duration:    time.Duration(r.Duration),
+				ErrorStr:    r.Error,
+				EvaluationMetrics: &runner.EvaluationMetrics{
+					TestsPassed: r.TestsPassed,
+					TestsFailed: r.TestsFailed,
+					LintIssues:  r.LintIssues,
+				},
+			}
+		}
+
+		if res.ErrorStr != "" && res.Error == nil {
+			res.Error = fmt.Errorf("%s", res.ErrorStr)
+		}
+		results = append(results, res)
+	}
+
+	// 4. Load Config (from DB)
+	cfg := &config.Configuration{}
+	if err := yaml.Unmarshal([]byte(exp.ConfigContent), cfg); err != nil {
+		log.Printf("Warning: failed to unmarshal config from DB: %v", err)
+	} else {
+		fmt.Printf("Loaded config from Database\n")
+	}
+
+	// 5. Console Summary
+	rep := report.New(results, os.Stdout, cfg, []string{"Report regenerated from SQLite Database"})
+	println("\n--- Results ---")
+	rep.GenerateConsoleReport()
+
+	fmt.Printf("\nDatabase analytics hydrated for Experiment %d\n", exp.ID)
 }

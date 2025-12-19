@@ -1,11 +1,11 @@
 # Tenkai Project Overview (for AI Agents)
 
-Tenkai is a Go-based framework for benchmarking and analyzing Model-Centric Programming (MCP) tool usage by AI agents, specifically optimized for the Gemini CLI.
+Tenkai is a Go-based framework for analyzing and evaluating Model-Centric Programming (MCP) tool usage by AI agents, specifically optimized for the Gemini CLI.
 
 ## Directory Structure
 
 - `cmd/tenkai`: Main entryway. Orchestrates experiment execution.
-- `configs/`: YAML configuration files for different studies (e.g., `system-prompt-study`, `hard-block-study`).
+- `studies/`: Self-contained experiment directories (configs, prompts, and results).
 - `internal/`: Core logic.
     - `runner/`: Executes scenarios using chosen alternatives. handles workspace isolation.
     - `workspace/`: Manages file system isolation and policy setup for each run.

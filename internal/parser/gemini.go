@@ -11,25 +11,25 @@ import (
 
 // AgentMetrics contains aggregated data from an agent run.
 type AgentMetrics struct {
-	Result       string // "success" or "failure"
-	InputTokens  int
-	OutputTokens int
-	TotalTokens  int
-	ToolCalls    []ToolCall
-	Errors       []ErrorEvent
-	Messages     []MessageEvent
-	LoopDetected bool
+	Result       string         `json:"result"`
+	InputTokens  int            `json:"input_tokens"`
+	OutputTokens int            `json:"output_tokens"`
+	TotalTokens  int            `json:"total_tokens"`
+	ToolCalls    []ToolCall     `json:"tool_calls"`
+	Errors       []ErrorEvent   `json:"errors"`
+	Messages     []MessageEvent `json:"messages"`
+	LoopDetected bool           `json:"loop_detected"`
 }
 
 // ToolCall represents a single tool execution attempt.
 type ToolCall struct {
-	Name      string
-	Args      string
-	Status    string // "success" or "error"
-	Output    string
-	Error     string
-	Duration  time.Duration
-	Timestamp time.Time
+	Name      string        `json:"name"`
+	Args      string        `json:"args"`
+	Status    string        `json:"status"` // "success" or "error"
+	Output    string        `json:"output"`
+	Error     string        `json:"error"`
+	Duration  time.Duration `json:"duration"`
+	Timestamp time.Time     `json:"timestamp"`
 }
 
 // ErrorEvent captures error/warning events
@@ -148,12 +148,26 @@ func ParseEvents(path string) (*AgentMetrics, error) {
 			}
 
 		case "message":
-			metrics.Messages = append(metrics.Messages, MessageEvent{
-				Timestamp: ts,
-				Role:      evt.Role,
-				Content:   evt.Content,
-				Delta:     evt.Delta,
-			})
+			if evt.Delta {
+				// Aggregate deltas
+				if len(metrics.Messages) > 0 && metrics.Messages[len(metrics.Messages)-1].Role == evt.Role {
+					metrics.Messages[len(metrics.Messages)-1].Content += evt.Content
+				} else {
+					metrics.Messages = append(metrics.Messages, MessageEvent{
+						Timestamp: ts,
+						Role:      evt.Role,
+						Content:   evt.Content,
+						Delta:     true,
+					})
+				}
+			} else {
+				metrics.Messages = append(metrics.Messages, MessageEvent{
+					Timestamp: ts,
+					Role:      evt.Role,
+					Content:   evt.Content,
+					Delta:     false,
+				})
+			}
 		}
 	}
 
