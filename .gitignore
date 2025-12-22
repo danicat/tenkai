@@ -31,12 +31,16 @@ frontend/.env*.local
 *.swo
 .DS_Store
 
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Brain / Artifacts (Antigravity/Agentic mode)
 .gemini/
 .agent/
 task.md
 implementation_plan.md
 walkthrough.md
-experiments/tenkai*
 experiments/runs/*
 /tenkai
