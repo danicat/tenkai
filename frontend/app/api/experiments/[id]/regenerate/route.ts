@@ -26,36 +26,32 @@ export async function POST(
         const experimentDir = path.dirname(resultsPath);
 
         const rootDir = path.resolve(process.cwd(), '..');
-        const binaryPath = path.join(rootDir, 'tenkai');
-
-        if (!fs.existsSync(binaryPath)) {
-            console.error(`Tenkai binary not found at: ${binaryPath}`);
-            return NextResponse.json({ error: 'Backend binary not found' }, { status: 500 });
-        }
-
-        // Trigger pre-built Tenkai binary in report-only mode
-        // Use absolute path for command
-        const cmd = binaryPath;
-        const args = ['-report-only', experimentDir];
-
-        console.log(`Executing: ${cmd} ${args.join(' ')}`);
+        // Trigger Tenkai binary from PATH in report-only mode
+        const cmd = 'tenkai';
+        const args = ['-experiment-id', String(id)];
 
         // We run synchronously-ish or detach? 
         // Report generation is fast, so we can probably wait for it to ensure it's done before returning.
 
         return new Promise<NextResponse>((resolve, reject) => {
-            const child = spawn(cmd, args, {
-                cwd: rootDir
-            });
-
-            let stderrData = '';
-            let stdoutData = '';
+            const child = spawn('tenkai', args, {
+                cwd: rootDir,
+                env: { ...process.env, PATH: process.env.PATH },
+                // Wait for completion for regeneration since we need the result immediately?
+                // Actually original code waited? No, it used exec before?
+                // Original spawn was fire-and-forget but regenerate usually blocks? 
+                // "WaitMsBeforeAsync" suggests it might be async.
+                // But here we're in an API route. 
+                // Let's keep it detached but maybe capture logs if needed.
+                // Original was just spawn('tenkai', ...).
+            }); let stdoutData = '';
 
             child.stdout.on('data', (data) => {
                 stdoutData += data.toString();
                 console.log(`[Tenkai CLI] ${data}`);
             });
 
+            let stderrData = '';
             child.stderr.on('data', (data) => {
                 stderrData += data.toString();
                 console.error(`[Tenkai CLI Error] ${data}`);

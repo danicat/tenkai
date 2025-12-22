@@ -36,7 +36,7 @@ export default function ExperimentForm() {
 
     // --- State ---
     const [loading, setLoading] = useState(false);
-    const [templates, setTemplates] = useState<string[]>([]);
+    const [templates, setTemplates] = useState<{ id: string, name: string }[]>([]);
     const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
     const [templateDetails, setTemplateDetails] = useState<TemplateDetails | null>(null);
 
@@ -48,6 +48,7 @@ export default function ExperimentForm() {
     // Scopes
     const [selectedAlts, setSelectedAlts] = useState<string[]>([]);
     const [selectedScens, setSelectedScens] = useState<string[]>([]);
+    const [controlAlt, setControlAlt] = useState<string>('');
 
     // --- Effects ---
 
@@ -60,7 +61,7 @@ export default function ExperimentForm() {
                 if (Array.isArray(data)) {
                     setTemplates(data);
                     if (data.length > 0 && !selectedTemplateName) {
-                        setSelectedTemplateName(data[0]);
+                        setSelectedTemplateName(data[0].id);
                     }
                 }
             } catch (e) {
@@ -89,7 +90,11 @@ export default function ExperimentForm() {
                     setConcurrent(data.config.max_concurrent || 1);
 
                     // Default to ALL selected
-                    setSelectedAlts(data.config.alternatives?.map((a: Alternative) => a.name) || []);
+                    const allAlts = data.config.alternatives?.map((a: Alternative) => a.name) || [];
+                    setSelectedAlts(allAlts);
+                    // Set control to the first alternative by default (or explicit if available)
+                    if (allAlts.length > 0) setControlAlt(allAlts[0]);
+
                     setSelectedScens(data.config.scenarios?.map((s: Scenario) => s.name) || []);
                 }
             } catch (e) {
@@ -104,7 +109,18 @@ export default function ExperimentForm() {
     // --- Handlers ---
 
     const handleToggleAlt = (name: string) => {
-        setSelectedAlts(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+        setSelectedAlts(prev => {
+            const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
+            // If we deselected the current control, reset it
+            if (controlAlt === name && !next.includes(name)) {
+                setControlAlt('');
+            }
+            // If we selected the first one and no control is set, select it
+            if (next.length === 1 && !controlAlt) {
+                setControlAlt(next[0]);
+            }
+            return next;
+        });
     };
 
     const handleToggleScen = (name: string) => {
@@ -127,7 +143,8 @@ export default function ExperimentForm() {
                 reps: reps,
                 concurrent: concurrent,
                 alternatives: selectedAlts,
-                scenarios: selectedScens
+                scenarios: selectedScens,
+                control: controlAlt
             };
 
             const res = await fetch('/api/experiments/run', {
@@ -195,7 +212,7 @@ export default function ExperimentForm() {
                                     >
                                         <option value="" disabled>Select a template...</option>
                                         {templates.map(t => (
-                                            <option key={t} value={t}>{t}</option>
+                                            <option key={t.id} value={t.id}>{t.name}</option>
                                         ))}
                                     </select>
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-600 text-xs">▼</div>
@@ -252,6 +269,28 @@ export default function ExperimentForm() {
                                     <div className="text-base font-mono text-emerald-500 mt-1">{totalJobs}</div>
                                 </div>
                             </div>
+
+                            {/* Control Selection */}
+                            {selectedAlts.length > 0 && (
+                                <div className="pt-6 border-t border-zinc-800">
+                                    <label className="block text-sm font-bold text-zinc-500 uppercase mb-2">Control Algorithm</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-white appearance-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all font-medium"
+                                            value={controlAlt}
+                                            onChange={(e) => setControlAlt(e.target.value)}
+                                            disabled={loading}
+                                        >
+                                            <option value="" disabled>Select control...</option>
+                                            {selectedAlts.map(alt => (
+                                                <option key={alt} value={alt}>{alt}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-600 text-xs">▼</div>
+                                    </div>
+                                    <p className="text-xs text-zinc-600 mt-2">Baseline for statistical comparison.</p>
+                                </div>
+                            )}
                         </div>
                     </section>
                 </div>
@@ -290,6 +329,7 @@ export default function ExperimentForm() {
                                                 <div>
                                                     <h4 className={`text-base font-bold ${isSelected ? 'text-blue-400' : 'text-zinc-300 group-hover:text-white'}`}>
                                                         {alt.name}
+                                                        {alt.name === controlAlt && <span className="ml-2 text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">Control</span>}
                                                     </h4>
                                                     {alt.description && (
                                                         <p className="text-sm text-zinc-500 mt-1.5 leading-relaxed">
@@ -371,3 +411,4 @@ function LoadingState() {
         </div>
     );
 }
+

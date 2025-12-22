@@ -3,6 +3,7 @@ description: "A minimal experiment to verify Tenkai is working correctly."
 repetitions: 1
 max_concurrent: 1
 timeout: "1m"
+control: "standard"
 
 alternatives:
   - name: "standard"

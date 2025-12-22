@@ -6,6 +6,7 @@ description: >
 repetitions: 10
 max_concurrent: 5
 timeout: 5m
+control: default
 alternatives:
   - name: default
     description: |
@@ -45,14 +46,8 @@ alternatives:
     settings_path: settings-force-mcp.json
 scenarios:
   - name: api_implementation
-    description: >-
-      Build an API while core read/write tools are blocked, forcing reliance on
-      specialized MCP tools.
+    description: ''
   - name: greenfield_cli
-    description: >-
-      Bootstrap a CLI framework using only alternate toolpaths and high-level
-      architectural knowledge.
+    description: ''
   - name: legacy_refactor
-    description: >-
-      Refactor code structure while standard 'replace' tools are restricted,
-      testing surgical precision.
+    description: ''

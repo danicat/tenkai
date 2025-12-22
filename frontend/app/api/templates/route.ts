@@ -13,7 +13,27 @@ export async function GET() {
 
         const templates = entries
             .filter(entry => entry.isDirectory() && entry.name !== 'runs')
-            .map(entry => entry.name);
+            .map(entry => {
+                const configPath = path.join(templatesDir, entry.name, 'config.yaml');
+                let name = entry.name;
+                if (fs.existsSync(configPath)) {
+                    try {
+                        const content = fs.readFileSync(configPath, 'utf8');
+                        // Simple manual parsing to avoid strict yaml dependency if possible, or use regex
+                        // name: "something"
+                        const match = content.match(/^name:\s*"?([^"\n]+)"?/m);
+                        if (match && match[1]) {
+                            name = match[1];
+                        }
+                    } catch (e) {
+                        console.error(`Failed to parse config for ${entry.name}`, e);
+                    }
+                }
+                return {
+                    id: entry.name,
+                    name: name
+                };
+            });
 
         return NextResponse.json(templates);
     } catch (error) {

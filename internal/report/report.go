@@ -32,27 +32,29 @@ func New(results []runner.Result, out io.Writer, cfg *config.Configuration, note
 	}
 }
 
+// IsResultSuccessful returns true if the run result is considered a success.
+func IsResultSuccessful(res runner.Result) bool {
+	return res.Success()
+}
+
 // GenerateConsoleReport prints a summary table to the configured output.
 func (r *Reporter) GenerateConsoleReport() {
 	w := tabwriter.NewWriter(r.Out, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "Alternative\tScenario\tRep\tDur\tTokens\tTools\tTest\tLint\tStatus")
 
 	for _, res := range r.Results {
+		isSuccess := IsResultSuccessful(res)
 		status := "✅"
-		if res.Error != nil {
-			if strings.Contains(res.Error.Error(), "timeout") {
+		if !isSuccess {
+			if res.Error != nil && strings.Contains(res.Error.Error(), "timeout") {
 				status = "⏱️ (Timeout)"
 			} else {
-				status = "❌ (Err)"
+				status = "❌ (Fail)"
 			}
+		} else if res.ValidationReport != "" {
+			status = "✅ (Pass)"
 		} else if res.AgentMetrics != nil && res.AgentMetrics.LoopDetected {
 			status = "🔄 (Loop)"
-		} else if res.EvaluationMetrics != nil {
-			if res.EvaluationMetrics.TestsFailed > 0 {
-				status = "❌ (Fail)"
-			} else if res.EvaluationMetrics.TestsPassed == 0 {
-				status = "⚠️ (Skip)"
-			}
 		}
 
 		tokens := 0
@@ -65,10 +67,10 @@ func (r *Reporter) GenerateConsoleReport() {
 		testStatus := "-"
 		lintIssues := 0
 		if res.EvaluationMetrics != nil {
-			if res.EvaluationMetrics.TestsPassed > 0 {
-				testStatus = "PASS"
-			} else if res.EvaluationMetrics.TestsFailed > 0 {
+			if res.EvaluationMetrics.TestsFailed > 0 {
 				testStatus = "FAIL"
+			} else if res.EvaluationMetrics.TestsPassed > 0 {
+				testStatus = "PASS"
 			}
 			lintIssues = res.EvaluationMetrics.LintIssues
 		}

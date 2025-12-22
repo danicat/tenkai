@@ -10,6 +10,7 @@ export function SidebarNav() {
         { icon: "📊", label: "Dashboard", href: "/" },
         { icon: "📈", label: "Reports", href: "/reports" },
         { icon: "📝", label: "Templates", href: "/templates" },
+        { icon: "🧪", label: "Scenarios", href: "/scenarios" },
     ];
 
     return (

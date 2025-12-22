@@ -8,17 +8,22 @@ export default function Toast() {
     const router = useRouter();
     const [show, setShow] = useState(false);
 
+    // Timer Effect
+    useEffect(() => {
+        if (show) {
+            const timer = setTimeout(() => {
+                setShow(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [show]);
+
+    // URL Check Effect
     useEffect(() => {
         if (searchParams.get('started') === 'true') {
             setShow(true);
             // Clear URL immediately so refresh doesn't trigger it again
             router.replace('/');
-
-            // Hide toast after 3 seconds
-            const timer = setTimeout(() => {
-                setShow(false);
-            }, 3000);
-            return () => clearTimeout(timer);
         }
     }, [searchParams, router]);
 

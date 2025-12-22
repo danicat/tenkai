@@ -12,7 +12,7 @@ async function getTemplates() {
 }
 
 export default async function TemplatesPage() {
-    const templates: string[] = await getTemplates();
+    const templates: { id: string, name: string }[] = await getTemplates();
 
     return (
         <div className="p-10 space-y-10 animate-in fade-in duration-500 max-w-7xl mx-auto">
@@ -31,16 +31,16 @@ export default async function TemplatesPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {templates.map((template) => (
-                    <Link href={`/templates/${template}`} key={template}>
+                    <Link href={`/templates/${template.id}`} key={template.id}>
                         <div className="glass p-6 rounded-2xl border border-white/5 hover:bg-white/[0.02] hover:border-blue-500/30 transition-all cursor-pointer group">
                             <div className="flex justify-between items-start mb-4">
                                 <span className="text-2xl">📝</span>
                                 <span className="text-zinc-500 group-hover:text-blue-400 transition-colors">→</span>
                             </div>
                             <h3 className="font-bold text-lg text-gray-200 group-hover:text-white transition-colors capitalize">
-                                {template.replace(/-/g, ' ')}
+                                {template.name}
                             </h3>
-                            <p className="text-sm text-zinc-500 font-mono mt-1">{template}</p>
+                            <p className="text-sm text-zinc-500 font-mono mt-1">{template.id}</p>
                         </div>
                     </Link>
                 ))}

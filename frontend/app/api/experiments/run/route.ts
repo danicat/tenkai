@@ -5,13 +5,13 @@ import path from 'path';
 
 export async function POST(req: NextRequest) {
     try {
-        const { name, template, reps, concurrent, alternatives, scenarios } = await req.json();
+        const { name, template, reps, concurrent, alternatives, scenarios, control } = await req.json();
 
         const rootDir = path.join(process.cwd(), '..');
         const configPath = path.join(rootDir, 'experiments', 'templates', template, 'config.yaml');
 
-        // Trigger pre-built Tenkai binary
-        const cmd = './tenkai';
+        // Trigger Tenkai binary from PATH
+        const cmd = 'tenkai';
         const args = [
             '-config', configPath,
             '-reps', reps.toString(),
@@ -20,6 +20,10 @@ export async function POST(req: NextRequest) {
 
         if (name) {
             args.push('-name', name);
+        }
+
+        if (control) {
+            args.push('-control', control);
         }
 
         if (alternatives && Array.isArray(alternatives) && alternatives.length > 0) {
@@ -32,10 +36,12 @@ export async function POST(req: NextRequest) {
 
         console.log(`Executing: ${cmd} ${args.join(' ')}`);
 
-        const child = spawn(cmd, args, {
+        console.log(`[Run] Spawning tenkai binary from PATH`);
+
+        const child = spawn('tenkai', args, {
             cwd: rootDir,
-            detached: true,
-            stdio: 'ignore'
+            env: { ...process.env, PATH: process.env.PATH },
+            stdio: 'ignore' // detach completely
         });
 
         child.unref();

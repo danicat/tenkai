@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
         db = new Database(dbPath);
         db.pragma('busy_timeout = 5000');
 
-        const stmt = db.prepare('UPDATE experiments SET control = ? WHERE id = ?');
+        const stmt = db.prepare('UPDATE experiments SET execution_control = ? WHERE id = ?');
         stmt.run(action, id);
 
         return NextResponse.json({ message: `Action ${action} recorded in DB`, action });

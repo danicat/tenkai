@@ -16,6 +16,7 @@ import (
 
 	"github.com/danicat/tenkai/internal/config"
 	"github.com/danicat/tenkai/internal/db"
+	"github.com/danicat/tenkai/internal/parser"
 	"github.com/danicat/tenkai/internal/report"
 	"github.com/danicat/tenkai/internal/runner"
 	"github.com/danicat/tenkai/internal/workspace"
@@ -28,6 +29,7 @@ func main() {
 	nameFlag := flag.String("name", "", "Override experiment name")
 	altsFlag := flag.String("alternatives", "", "Comma-separated list of alternatives to run")
 	scensFlag := flag.String("scenarios", "", "Comma-separated list of scenarios to run")
+	controlFlag := flag.String("control", "", "Name of the control alternative")
 	experimentID := flag.Int64("experiment-id", 0, "Experiment ID to regenerate report or resume")
 	fixReportPath := flag.String("fix-report", "", "Path to existing report.md to fix structure/formatting")
 	flag.Parse()
@@ -91,6 +93,9 @@ func main() {
 	}
 	if *nameFlag != "" {
 		cfg.Name = *nameFlag
+	}
+	if *controlFlag != "" {
+		cfg.Control = *controlFlag
 	}
 
 	// Apply Filters
@@ -176,14 +181,16 @@ func main() {
 
 	// 4. Register Experiment in DB (Initial status: running)
 	expRecord := &db.Experiment{
-		Timestamp:     timestamp,
-		Name:          cfg.Name,
-		ConfigPath:    destConfigPath,
-		Status:        "running",
-		Reps:          cfg.Repetitions,
-		Concurrent:    cfg.MaxConcurrent,
-		Description:   cfg.Description,
-		ConfigContent: string(effectiveConfigData),
+		Timestamp:         timestamp,
+		Name:              cfg.Name,
+		ConfigPath:        destConfigPath,
+		Status:            "running",
+		Reps:              cfg.Repetitions,
+		Concurrent:        cfg.MaxConcurrent,
+		Description:       cfg.Description,
+		ConfigContent:     string(effectiveConfigData),
+		ExecutionControl:  "", // Signals are empty by default
+		ExperimentControl: cfg.Control,
 	}
 
 	expID, err := database.CreateExperiment(expRecord)
@@ -198,6 +205,7 @@ func main() {
 
 	results, err := r.Run(context.Background(), cfg, timestamp, experimentDir)
 	if err != nil {
+		database.UpdateExperimentError(expID, err.Error())
 		database.UpdateExperimentStatus(expID, "failed")
 		log.Fatalf("Experiment run failed: %v", err)
 	}
@@ -233,8 +241,6 @@ func main() {
 }
 
 func handleReportOnly(expID int64) {
-	fmt.Printf("Regenerating report for Experiment ID: %d\n", expID)
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get current working directory: %v", err)
@@ -254,7 +260,7 @@ func handleReportOnly(expID int64) {
 		log.Fatalf("Failed to find experiment in DB for ID %d: %v", expID, err)
 	}
 
-	fmt.Printf("Found Experiment Name: %s\n", exp.Name)
+	fmt.Printf("Regenerating report for: %s (ID: %d)\n", exp.Name, exp.ID)
 
 	// 2. Fetch Results from DB
 	dbResults, err := database.GetRunResults(exp.ID)
@@ -269,35 +275,41 @@ func handleReportOnly(expID int64) {
 		if r.RawJSON != "" {
 			if err := json.Unmarshal([]byte(r.RawJSON), &res); err != nil {
 				log.Printf("Warning: failed to unmarshal RawJSON for run %d: %v", r.ID, err)
-				// Fallback to manual population of basic fields
-				res = runner.Result{
-					Alternative: r.Alternative,
-					Scenario:    r.Scenario,
-					Repetition:  r.Repetition,
-					Duration:    time.Duration(r.Duration),
-					ErrorStr:    r.Error,
-					EvaluationMetrics: &runner.EvaluationMetrics{
-						TestsPassed: r.TestsPassed,
-						TestsFailed: r.TestsFailed,
-						LintIssues:  r.LintIssues,
-					},
-				}
+				res.Alternative = r.Alternative
+				res.Scenario = r.Scenario
+				res.Repetition = r.Repetition
+				res.Duration = time.Duration(r.Duration)
+				res.ErrorStr = r.Error
 			}
 		} else {
-			// Legacy record without RawJSON
-			res = runner.Result{
-				Alternative: r.Alternative,
-				Scenario:    r.Scenario,
-				Repetition:  r.Repetition,
-				Duration:    time.Duration(r.Duration),
-				ErrorStr:    r.Error,
-				EvaluationMetrics: &runner.EvaluationMetrics{
-					TestsPassed: r.TestsPassed,
-					TestsFailed: r.TestsFailed,
-					LintIssues:  r.LintIssues,
-				},
-			}
+			res.Alternative = r.Alternative
+			res.Scenario = r.Scenario
+			res.Repetition = r.Repetition
+			res.Duration = time.Duration(r.Duration)
+			res.ErrorStr = r.Error
 		}
+
+		// Ensure EvaluationMetrics are populated
+		res.EvaluationMetrics = &runner.EvaluationMetrics{
+			TestsPassed: r.TestsPassed,
+			TestsFailed: r.TestsFailed,
+			LintIssues:  r.LintIssues,
+		}
+
+		// Sync tokens and other metrics from columns if AgentMetrics is missing or empty
+		if res.AgentMetrics == nil {
+			res.AgentMetrics = &parser.AgentMetrics{}
+		}
+		if res.AgentMetrics.TotalTokens == 0 {
+			res.AgentMetrics.TotalTokens = r.TotalTokens
+			res.AgentMetrics.InputTokens = r.InputTokens
+			res.AgentMetrics.OutputTokens = r.OutputTokens
+		}
+		res.IsSuccess = r.IsSuccess
+		res.Score = r.Score
+		res.ValidationReport = r.ValidationReport
+		res.Stdout = r.Stdout
+		res.Stderr = r.Stderr
 
 		if res.ErrorStr != "" && res.Error == nil {
 			res.Error = fmt.Errorf("%s", res.ErrorStr)
@@ -309,14 +321,51 @@ func handleReportOnly(expID int64) {
 	cfg := &config.Configuration{}
 	if err := yaml.Unmarshal([]byte(exp.ConfigContent), cfg); err != nil {
 		log.Printf("Warning: failed to unmarshal config from DB: %v", err)
-	} else {
-		fmt.Printf("Loaded config from Database\n")
 	}
 
-	// 5. Console Summary
+	// 5. Generate & Save Report
 	rep := report.New(results, os.Stdout, cfg, []string{"Report regenerated from SQLite Database"})
 	println("\n--- Results ---")
 	rep.GenerateConsoleReport()
 
-	fmt.Printf("\nDatabase analytics hydrated for Experiment %d\n", exp.ID)
+	var buf bytes.Buffer
+	if err := rep.GenerateMarkdown(&buf); err == nil {
+		if err := database.UpdateExperimentReport(exp.ID, buf.String()); err != nil {
+			log.Printf("Warning: failed to save report to DB: %v", err)
+		}
+		fmt.Printf("\nMarkdown report regenerated and saved to Database.\n")
+	}
+
+	// 6. Calculate and Save Summaries (3rd NF)
+	controlAlt := cfg.Control
+	summary := runner.CalculateSummary(results, controlAlt)
+	database.DeleteExperimentSummaries(exp.ID)
+	for name, s := range summary.Alternatives {
+		row := &db.ExperimentSummaryRow{
+			ExperimentID:    exp.ID,
+			Alternative:     name,
+			TotalRuns:       s.Count,
+			SuccessCount:    s.SuccessCount,
+			SuccessRate:     s.SuccessRate,
+			AvgDuration:     s.AvgDuration,
+			AvgTokens:       s.AvgTokens,
+			AvgLint:         s.AvgLint,
+			Timeouts:        s.Timeouts,
+			TotalToolCalls:  s.TotalToolCalls,
+			FailedToolCalls: s.FailedTools,
+			AvgTestsPassed:  s.AvgTestsPassed,
+			AvgTestsFailed:  s.AvgTestsFailed,
+			PSuccess:        s.PSuccess,
+			PDuration:       s.PDuration,
+			PTokens:         s.PTokens,
+			PLint:           s.PLint,
+			PTestsPassed:    s.PTestsPassed,
+			PTestsFailed:    s.PTestsFailed,
+		}
+		if err := database.SaveExperimentSummary(row); err != nil {
+			log.Printf("Warning: failed to save summary for %s: %v", name, err)
+		}
+	}
+
+	fmt.Printf("Database analytics hydrated for Experiment %d\n", exp.ID)
 }

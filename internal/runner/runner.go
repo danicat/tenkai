@@ -47,6 +47,25 @@ type Result struct {
 	AgentMetrics      *parser.AgentMetrics `json:"agent_metrics,omitempty"`
 	EvaluationMetrics *EvaluationMetrics   `json:"evaluation_metrics,omitempty"`
 	GeneratedFiles    []db.RunFile         `json:"generated_files,omitempty"`
+	IsSuccess         bool                 `json:"is_success"`
+	Score             int                  `json:"score"`
+	ValidationReport  string               `json:"validation_report"`
+}
+
+// IsSuccess returns true if the run result is considered a success.
+func (r Result) Success() bool {
+	if r.ValidationReport != "" {
+		return r.IsSuccess
+	}
+	if r.Error != nil {
+		return false
+	}
+	// For legacy runs, we expect at least one test to pass
+	if r.EvaluationMetrics != nil {
+		return r.EvaluationMetrics.TestsPassed > 0
+	}
+	// If no evaluation data at all, it can't be a legacy success
+	return false
 }
 
 // Runner handles the execution of experiments.
@@ -200,6 +219,10 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Configuration, timestamp t
 					runRes.LoopDetected = res.AgentMetrics.LoopDetected
 				}
 
+				runRes.IsSuccess = res.IsSuccess
+				runRes.Score = res.Score
+				runRes.ValidationReport = res.ValidationReport
+
 				// 1. Save Run Result (returns ID for FKs)
 				runID, err := r.db.SaveRunResult(runRes)
 				if err != nil {
@@ -285,6 +308,36 @@ Done:
 	if r.db != nil && r.experimentID != 0 {
 		r.db.UpdateExperimentProgress(r.experimentID, completed, resultsLimit)
 		r.db.UpdateExperimentStatus(r.experimentID, finalStatus)
+
+		// Calculate and persist summaries (3rd NF)
+		summary := CalculateSummary(results, cfg.Control)
+		r.db.DeleteExperimentSummaries(r.experimentID)
+		for name, s := range summary.Alternatives {
+			row := &db.ExperimentSummaryRow{
+				ExperimentID:    r.experimentID,
+				Alternative:     name,
+				TotalRuns:       s.Count,
+				SuccessCount:    s.SuccessCount,
+				SuccessRate:     s.SuccessRate,
+				AvgDuration:     s.AvgDuration,
+				AvgTokens:       s.AvgTokens,
+				AvgLint:         s.AvgLint,
+				Timeouts:        s.Timeouts,
+				TotalToolCalls:  s.TotalToolCalls,
+				FailedToolCalls: s.FailedTools,
+				AvgTestsPassed:  s.AvgTestsPassed,
+				AvgTestsFailed:  s.AvgTestsFailed,
+				PSuccess:        s.PSuccess,
+				PDuration:       s.PDuration,
+				PTokens:         s.PTokens,
+				PLint:           s.PLint,
+				PTestsPassed:    s.PTestsPassed,
+				PTestsFailed:    s.PTestsFailed,
+			}
+			if err := r.db.SaveExperimentSummary(row); err != nil {
+				log.Printf("Warning: failed to save summary for %s: %v", name, err)
+			}
+		}
 	}
 
 	return results, nil
@@ -300,7 +353,7 @@ func (r *Runner) checkAction(experimentDir string) string {
 		return ""
 	}
 
-	return exp.Control
+	return exp.ExecutionControl
 }
 
 func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentName string, alt config.Alternative, scen config.Scenario, rep int, experimentDir string, timeout time.Duration) Result {
@@ -478,8 +531,59 @@ func (r *Runner) runSingle(ctx context.Context, timestamp time.Time, experimentN
 	}
 
 	if shouldEvaluate {
-		res.EvaluationMetrics = r.evaluateCode(ctx, wsPath)
+		var scenConfig *config.ScenarioConfig
+
+		// Try to resolve absolute path correctly.
+		// Actually best way to get path is from config? But config doesn't have path.
+		// Re-use logic from manager?
+		// Manager knows inputs.
+		// Let's assume standard structure: <repo>/scenarios/<name>/scenario.yaml
+		// Or try to load from template path.
+		// Since we don't have template path handy easily (manager knows),
+		// we can check if it exists in Workspace via manager's knowledge?
+		// Actually, runSingle knows experimentDir.
+		// Let's just try to load from wsPath if it was copied?
+		// Manager copied `scenario.yaml`? NOT strictly required by PrepareWorkspace (it reads it).
+		// But PrepareWorkspace *doesn't* copy scenario.yaml to workspace unless it's an asset.
+
+		// Let's try to find it in default search path like Manager does: "./scenarios/"+scen.Name
+		cwd, _ := os.Getwd()
+		possiblePath := filepath.Join(cwd, "scenarios", scen.Name, "scenario.yaml")
+		if _, err := os.Stat(possiblePath); err == nil {
+			scenConfig, _ = config.LoadScenarioConfig(possiblePath)
+		}
+
+		// Read the metrics log to get stdout content for validation
+		// Read logPath content
+		logContentBytes, _ := os.ReadFile(logPath)
+		stdoutContent := string(logContentBytes)
+
+		metrics, valReport, err := r.evaluateCode(ctx, wsPath, scenConfig, stdoutContent)
+		if err != nil {
+			log.Printf("Evaluation failed: %v", err)
+			res.Error = err
+			res.ErrorStr = err.Error()
+		} else {
+			res.EvaluationMetrics = metrics
+			if valReport != nil {
+				res.IsSuccess = valReport.OverallSuccess
+				res.Score = valReport.TotalScore
+				jsonBytes, _ := json.Marshal(valReport)
+				res.ValidationReport = string(jsonBytes)
+
+				// NEW: Aggregate counts into metrics so they show up in DB columns
+				if res.EvaluationMetrics == nil {
+					res.EvaluationMetrics = &EvaluationMetrics{}
+				}
+				res.EvaluationMetrics.TestsPassed = valReport.TestsPassed
+				res.EvaluationMetrics.TestsFailed = valReport.TestsFailed
+				res.EvaluationMetrics.LintIssues = valReport.LintIssues
+			}
+		}
 	}
+
+	// Finalize IsSuccess using centralized logic
+	res.IsSuccess = res.Success()
 
 	// 6. Snapshot Workspace Files
 	res.GeneratedFiles = r.captureFiles(wsPath)
@@ -533,7 +637,19 @@ func (r *Runner) captureFiles(wsPath string) []db.RunFile {
 	return files
 }
 
-func (r *Runner) evaluateCode(ctx context.Context, wsPath string) *EvaluationMetrics {
+func (r *Runner) evaluateCode(ctx context.Context, wsPath string, scenConfig *config.ScenarioConfig, stdout string) (*EvaluationMetrics, *ValidationReport, error) {
+	// If scenario config exists and has validation rules, use new engine
+	if scenConfig != nil && len(scenConfig.Validation) > 0 {
+		report, err := r.Validate(ctx, wsPath, scenConfig.Validation, stdout)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Return nil metrics for now, relying on ValidationReport
+		// We could map Test items to metrics if needed
+		return nil, report, nil
+	}
+
+	// Legacy evaluation
 	eval := &EvaluationMetrics{}
 
 	// 1. Run Tests with JSON output
@@ -598,19 +714,21 @@ func (r *Runner) evaluateCode(ctx context.Context, wsPath string) *EvaluationMet
 	lintCmd.Stdout = &lintOut
 	if err := lintCmd.Run(); err != nil {
 		if strings.Contains(err.Error(), "executable file not found") {
-			// Fallback to go vet (non-json unfortunately, but we'll try to parse it)
-			r.runGoVet(ctx, wsPath, eval)
-		} else {
-			// golangci-lint found issues, parse JSON
-			r.parseGolangciJSON(lintOut.Bytes(), eval)
+			// ignore missing lint
 		}
 	} else {
-		// No issues or json output anyway
-		r.parseGolangciJSON(lintOut.Bytes(), eval)
+		// Output is in lintOut
+		// Parse
+		var result struct {
+			Issues []db.LintIssue `json:"Issues"`
+		}
+		if err := json.Unmarshal(lintOut.Bytes(), &result); err == nil {
+			eval.Lints = result.Issues
+			eval.LintIssues = len(result.Issues)
+		}
 	}
 
-	eval.LintIssues = len(eval.Lints)
-	return eval
+	return eval, nil, nil
 }
 
 func (r *Runner) parseGolangciJSON(data []byte, eval *EvaluationMetrics) {
