@@ -1,6 +1,11 @@
-# Tenkai: Agentic Tool-Calling Experimentation Framework
+# Tenkai: Experimentation Framework for Testing Coding Agents
 
-Tenkai is a powerful framework designed to evaluate and optimize the tool-calling behaviors of AI coding agents. It provides a structured environment for running A/B tests on system prompts, tool availability, and agent configurations across various coding scenarios.
+> [!IMPORTANT]
+> **This project has moved!**
+> Tenkai is now part of the [Google Cloud DevRel Demos](https://github.com/GoogleCloudPlatform/devrel-demos) repository.
+> You can find the latest version here: [devrel-demos/agents/tenkai](https://github.com/GoogleCloudPlatform/devrel-demos/tree/main/agents/tenkai)
+
+Tenkai is a powerful framework designed to evaluate and optimize AI coding agents. It provides a structured environment for running A/B tests on system prompts, tool availability, and agent configurations across various coding scenarios. It provides a structured environment for running A/B tests on system prompts, tool availability, and agent configurations across various coding scenarios.
 
 ## Overview
 
