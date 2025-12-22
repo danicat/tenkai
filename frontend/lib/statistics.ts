@@ -7,6 +7,9 @@ export interface RunResult {
     lint_issues?: number;
     tests_passed?: number;
     tests_failed?: number;
+    is_success?: boolean;
+    validation_report?: string;
+    total_tokens?: number;
     agent_metrics?: {
         total_tokens: number;
         tool_calls: number;
@@ -56,14 +59,19 @@ export function calculateStats(runs: RunResult[]): Record<string, StatGroup> {
         const g = groups[run.alternative];
         g.count++;
 
-        // A run is successful ONLY if no error AND at least one test passed
-        const isSuccess = !run.error && (run.tests_passed || 0) > 0;
+        // A run is successful if is_success is true (new validation system) 
+        // OR if no error AND at least one test passed (legacy eval system)
+        const isSuccess = (run.validation_report && run.validation_report !== "")
+            ? !!run.is_success
+            : (!run.error && (run.tests_passed || 0) > 0);
         if (isSuccess) {
             g.successCount++;
             g.successes.push(1);
             g.durations.push(run.duration / 1e9); // Convert to seconds
 
-            if (run.agent_metrics) {
+            if (run.total_tokens !== undefined) {
+                g.avgTokens += run.total_tokens;
+            } else if (run.agent_metrics) {
                 g.avgTokens += run.agent_metrics.total_tokens;
             }
         } else {

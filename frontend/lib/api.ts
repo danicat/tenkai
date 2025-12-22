@@ -1,7 +1,13 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
-const DB_PATH = path.join(process.cwd(), '..', 'experiments', 'tenkai.db');
+const rootDbPath = path.join(process.cwd(), 'experiments', 'tenkai.db');
+const frontendDbPath = path.join(process.cwd(), '..', 'experiments', 'tenkai.db');
+
+const DB_PATH = fs.existsSync(rootDbPath) ? rootDbPath : frontendDbPath;
+
+console.log(`[Tenkai] Using Database at: ${DB_PATH}`);
 
 export interface ExperimentRecord {
     id: number;
@@ -14,15 +20,42 @@ export interface ExperimentRecord {
     reps: number;
     concurrent: number;
     description?: string;
+    execution_control?: string;
+    experiment_control?: string;
+    error_message?: string;
     duration_total?: number;
     success_rate?: string;
     config_content: string;
     report_content: string;
+    ai_analysis?: string;
     progress?: {
         completed: number;
         total: number;
         percentage: number;
     };
+}
+
+export interface ExperimentSummaryRecord {
+    id: number;
+    experiment_id: number;
+    alternative: string;
+    total_runs: number;
+    success_count: number;
+    success_rate: number;
+    avg_duration: number;
+    avg_tokens: number;
+    avg_lint: number;
+    timeouts: number;
+    total_tool_calls: number;
+    failed_tool_calls: number;
+    p_success: number;
+    p_duration: number;
+    p_tokens: number;
+    p_lint: number;
+    p_tests_passed: number;
+    p_tests_failed: number;
+    avg_tests_passed: number;
+    avg_tests_failed: number;
 }
 
 export interface Checkpoint {
@@ -73,6 +106,30 @@ export interface LintResultRecord {
     rule_id: string;
 }
 
+export interface RunResultRecord {
+    id: number;
+    experiment_id: number;
+    alternative: string;
+    scenario: string;
+    repetition: number;
+    duration: number;
+    error: string;
+    stdout: string;
+    stderr: string;
+    tests_passed: number;
+    tests_failed: number;
+    lint_issues: number;
+    total_tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+    tool_calls_count: number;
+    loop_detected: boolean;
+    is_success: boolean;
+    score: number;
+    validation_report: string;
+    status: string;
+}
+
 function getDB() {
     const db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
@@ -95,7 +152,7 @@ export async function getExperiments(): Promise<ExperimentRecord[]> {
         const rows = db.prepare(`
             SELECT 
                 e.*,
-                (SELECT COUNT(*) FROM run_results WHERE experiment_id = e.id AND error = '' AND tests_passed > 0) as success_count,
+                (SELECT COUNT(*) FROM run_results WHERE experiment_id = e.id AND is_success = 1) as success_count,
                 (SELECT COUNT(*) FROM run_results WHERE experiment_id = e.id) as total_runs
             FROM experiments e 
             ORDER BY timestamp DESC
@@ -112,6 +169,7 @@ export async function getExperiments(): Promise<ExperimentRecord[]> {
                 description: row.description,
                 duration_total: row.duration,
                 success_rate: successRate,
+                error_message: row.error_message,
                 config_content: row.config_content,
                 report_content: row.report_content
             };
@@ -145,6 +203,7 @@ export async function getExperimentById(id: number | string): Promise<Experiment
         const record: ExperimentRecord = {
             ...row,
             timestamp: safeDate(row.timestamp),
+            error_message: row.error_message,
             config_content: row.config_content,
             report_content: row.report_content
         };
@@ -214,8 +273,7 @@ export async function getCheckpoint(idOrPath: string): Promise<Checkpoint | null
 }
 // Fetch a single experiment by ID
 export function getExperiment(id: number): ExperimentRecord | null {
-    const dbPath = process.env.DB_PATH || path.join(process.cwd(), '..', 'experiments', 'tenkai.db');
-    const db = new Database(dbPath);
+    const db = getDB();
     const stmt = db.prepare(`
         SELECT 
             id, 
@@ -228,7 +286,11 @@ export function getExperiment(id: number): ExperimentRecord | null {
             reps,
             concurrent,
             total_jobs,
-            completed_jobs
+            completed_jobs,
+            error_message,
+            execution_control,
+            experiment_control,
+            ai_analysis
         FROM experiments 
         WHERE id = ?
     `);
@@ -248,6 +310,12 @@ export function getExperiment(id: number): ExperimentRecord | null {
         status: row.status,
         reps: row.reps,
         concurrent: row.concurrent,
+        error_message: row.error_message,
+        execution_control: row.execution_control,
+        experiment_control: row.experiment_control,
+        ai_analysis: row.ai_analysis,
+        config_content: row.config_content || '',
+        report_content: row.report_content || '',
         progress: {
             total: row.total_jobs || 0,
             completed: row.completed_jobs || 0,
@@ -256,31 +324,52 @@ export function getExperiment(id: number): ExperimentRecord | null {
     };
 }
 
+export async function saveAIAnalysis(id: number | string, analysis: string) {
+    const db = getDB();
+    try {
+        db.prepare('UPDATE experiments SET ai_analysis = ? WHERE id = ?').run(analysis, String(id));
+    } finally {
+        db.close();
+    }
+}
+
 export async function getSimplifiedMetrics(id: number | string) {
     const db = getDB();
     try {
-        const results = db.prepare('SELECT * FROM run_results WHERE experiment_id = ?').all(String(id)) as any[];
+        const summaries = db.prepare('SELECT * FROM experiment_summaries WHERE experiment_id = ?').all(String(id)) as ExperimentSummaryRecord[];
 
-        if (results.length === 0) return null;
+        if (summaries.length === 0) return null;
 
-        const total = results.length;
-        const successful = results.filter(r => r.error === '' && r.tests_passed > 0).length;
-        const totalDuration = results.reduce((acc, r) => acc + (r.duration || 0), 0);
-        const totalLint = results.reduce((acc, r) => acc + (r.lint_issues || 0), 0);
+        const total = summaries.reduce((acc, s) => acc + s.total_runs, 0);
+        const successful = summaries.reduce((acc, s) => acc + s.success_count, 0);
+        const totalDurationS = summaries.reduce((acc, s) => acc + (s.avg_duration * s.success_count), 0);
+        const totalLint = summaries.reduce((acc, s) => acc + s.avg_lint * s.total_runs, 0);
+        const totalTokens = summaries.reduce((acc, s) => acc + (s.avg_tokens * s.success_count), 0);
 
         return {
             total,
             successful,
             successRate: (successful / total * 100).toFixed(1) + '%',
-            avgDuration: (totalDuration / total / 1e9).toFixed(1) + 's',
+            avgDuration: (totalDurationS / (successful || 1)).toFixed(1) + 's',
+            avgTokens: (totalTokens / (successful || 1) / 1000).toFixed(1) + 'k',
             totalLint,
-            results: results.map(r => ({ ...r, duration: r.duration / 1e9 }))
+            // results is kept for scenario-level drill-down if needed, but we should fetch separately
+            results: []
         };
     } finally {
         db.close();
     }
 }
-export async function getRunResults(experimentId: number | string): Promise<any[]> {
+
+export async function getExperimentSummaries(id: number | string): Promise<ExperimentSummaryRecord[]> {
+    const db = getDB();
+    try {
+        return db.prepare('SELECT * FROM experiment_summaries WHERE experiment_id = ?').all(String(id)) as ExperimentSummaryRecord[];
+    } finally {
+        db.close();
+    }
+}
+export async function getRunResults(experimentId: number | string): Promise<RunResultRecord[]> {
     const db = getDB();
     const id = Number(experimentId);
     try {
@@ -288,24 +377,30 @@ export async function getRunResults(experimentId: number | string): Promise<any[
 
         return rows.map(r => ({
             id: r.id,
+            experiment_id: r.experiment_id,
             alternative: r.alternative,
             scenario: r.scenario,
+            repetition: r.repetition,
             duration: r.duration,
-            error: r.error,
-            status: r.tests_passed > 0 ? 'SUCCESS' : (r.error ? 'ERROR' : 'FAIL'),
-            lint_issues: r.lint_issues,
-            tests_passed: r.tests_passed,
-            tests_failed: r.tests_failed,
-            agent_metrics: {
-                total_tokens: r.total_tokens || 0,
-                input_tokens: r.input_tokens || 0,
-                output_tokens: r.output_tokens || 0,
-                tool_calls_count: r.tool_calls_count || 0,
-                loop_detected: Boolean(r.loop_detected)
-            },
-            stdout: r.stdout,
-            stderr: r.stderr
+            error: r.error || '',
+            stdout: r.stdout || '',
+            stderr: r.stderr || '',
+            tests_passed: r.tests_passed || 0,
+            tests_failed: r.tests_failed || 0,
+            lint_issues: r.lint_issues || 0,
+            total_tokens: r.total_tokens || 0,
+            input_tokens: r.input_tokens || 0,
+            output_tokens: r.output_tokens || 0,
+            tool_calls_count: r.tool_calls_count || 0,
+            loop_detected: !!r.loop_detected,
+            is_success: !!r.is_success,
+            score: r.score || 0,
+            validation_report: r.validation_report || '',
+            status: r.validation_report
+                ? (r.is_success ? 'SUCCESS' : 'FAIL')
+                : (r.tests_passed > 0 ? 'SUCCESS' : (r.error ? 'ERROR' : 'FAIL'))
         }));
+
     } finally {
         db.close();
     }
@@ -381,6 +476,29 @@ export async function getNextExperimentNumber(nameBase: string): Promise<number>
             }
         }
         return maxNum + 1;
+    } finally {
+        db.close();
+    }
+}
+
+export async function getConfigFile(experimentId: number | string, relativePath: string): Promise<string | null> {
+    const db = getDB();
+    try {
+        const row = db.prepare('SELECT config_path FROM experiments WHERE id = ?').get(String(experimentId)) as any;
+        if (!row || !row.config_path) return null;
+
+        const configDir = path.dirname(row.config_path);
+        // Use path.resolve to handle both absolute paths (stored in DB) and relative paths
+        const fullPath = path.resolve(configDir, relativePath);
+
+        if (fs.existsSync(fullPath)) {
+            return fs.readFileSync(fullPath, 'utf8');
+        }
+        console.error(`File not found at: ${fullPath} (configDir: ${configDir}, path: ${relativePath})`);
+        return null;
+    } catch (e) {
+        console.error(`Failed to read config file ${relativePath}:`, e);
+        return null;
     } finally {
         db.close();
     }
