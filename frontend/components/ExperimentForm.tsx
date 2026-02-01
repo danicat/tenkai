@@ -1,0 +1,278 @@
+'use client';
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from 'next/link';
+import { toast } from "sonner";
+import { Button } from "./ui/button";
+import { Input, TextArea, Select } from "./ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { cn } from "@/utils/cn";
+import { ScenarioSelector } from "./ScenarioSelector";
+import { toSnakeCase } from "@/utils/ui";
+import { getExperiments } from "@/app/api/api";
+
+export default function ExperimentForm({ templates, scenarios }: { templates: any[], scenarios: any[] }) {
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+    const [templateDetails, setTemplateDetails] = useState<any>(null);
+
+    // Form states
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [reps, setReps] = useState(1);
+    const [concurrent, setConcurrent] = useState(1);
+    const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
+    const [selectedAlternatives, setSelectedAlternatives] = useState<string[]>([]);
+    const [controlAlt, setControlAlt] = useState<string>("");
+    const [timeout, setTimeout] = useState("10m");
+
+    useEffect(() => {
+        if (templates.length > 0 && !selectedTemplate) {
+            setSelectedTemplate(templates[0].id);
+        }
+    }, [templates]);
+
+    useEffect(() => {
+        if (!selectedTemplate) return;
+
+        const fetchTemplate = async () => {
+            const res = await fetch(`/api/templates/${selectedTemplate}/config`);
+            const data = await res.json();
+            setTemplateDetails(data);
+
+            // Fetch experiments to determine the next number
+            const experiments = await getExperiments();
+            const baseName = toSnakeCase(data.name);
+
+            let maxNum = 0;
+            // Pattern matches baseName_XXX where XXX is a number
+            const pattern = new RegExp(`^${baseName}_(\\d+)$`);
+
+            experiments.forEach(exp => {
+                const match = exp.name.match(pattern);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (num > maxNum) maxNum = num;
+                }
+            });
+
+            const nextNum = (maxNum + 1).toString().padStart(3, '0');
+            setName(`${baseName}_${nextNum}`);
+
+            setDescription(data.description || "");
+            setReps(data.config.reps || 1);
+            setConcurrent(data.config.concurrent || 1);
+            setSelectedScenarios(data.config.scenarios.map((s: any) => {
+                if (typeof s === 'string') {
+                    const parts = s.split('/');
+                    return parts[parts.length - 1];
+                }
+                return String(s.id);
+            }));
+            setSelectedAlternatives(data.config.alternatives.map((a: any) => a.name));
+            setControlAlt(data.config.experiment_control || "");
+            setTimeout(data.config.timeout || "10m");
+        };
+        fetchTemplate();
+    }, [selectedTemplate]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (selectedScenarios.length === 0) {
+            toast.error("Please select at least one scenario to launch.");
+            return;
+        }
+
+        setLoading(true);
+
+        const payload = {
+            name,
+            description,
+            template_id: selectedTemplate,
+            reps: Number(reps),
+            concurrent: Number(concurrent),
+            scenarios: selectedScenarios,
+            alternatives: selectedAlternatives,
+            control: controlAlt,
+            timeout: timeout
+        };
+
+        try {
+            const res = await fetch('/api/experiments/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                toast.success("Experiment launched successfully!");
+                router.refresh();
+                router.push('/experiments');
+            } else {
+                toast.error("Failed to launch experiment");
+            }
+        } catch (e) {
+            toast.error("Error launching experiment");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const totalJobs = selectedScenarios.length * selectedAlternatives.length * reps;
+
+    const parseDurationMinutes = (d: string): number => {
+        if (!d) return 10;
+        const match = d.match(/(\d+)([hms])/);
+        if (!match) {
+            const val = parseInt(d);
+            return isNaN(val) ? 10 : val;
+        }
+        const val = parseInt(match[1]);
+        const unit = match[2];
+        if (unit === 'h') return val * 60;
+        if (unit === 'm') return val;
+        if (unit === 's') return Math.ceil(val / 60) || 1;
+        return 10;
+    };
+
+    const timeoutMins = parseDurationMinutes(timeout);
+    const estimatedTime = Math.ceil((totalJobs / Math.max(1, concurrent)) * timeoutMins);
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-8 max-w-5xl">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                {/* Left Column: Core Config */}
+                <div className="md:col-span-8 space-y-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Primary Identity</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <Select
+                                label="Base Template"
+                                value={selectedTemplate}
+                                onChange={(e) => setSelectedTemplate(e.target.value)}
+                                options={templates.map(t => ({ value: t.id, label: t.name }))}
+                            />
+                            <Input label="Experiment Name" value={name} onChange={(e) => setName(e.target.value)} required />
+                            <Select
+                                label="Control Alternative"
+                                value={controlAlt}
+                                onChange={(e) => setControlAlt(e.target.value)}
+                                options={[
+                                    { value: "", label: "No Control (None)" },
+                                    ...(templateDetails?.config.alternatives.map((a: any) => ({ value: a.name, label: a.name })) || [])
+                                ]}
+                            />
+                            <TextArea label="Context / Objectives" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Alternative Selection</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 gap-4">
+                                {templateDetails?.config.alternatives.map((alt: any) => {
+                                    const isSelected = selectedAlternatives.includes(alt.name);
+                                    return (
+                                        <button
+                                            key={alt.name}
+                                            type="button"
+                                            onClick={() => {
+                                                if (isSelected) setSelectedAlternatives(prev => prev.filter(a => a !== alt.name));
+                                                else setSelectedAlternatives(prev => [...prev, alt.name]);
+                                            }}
+                                            className={cn(
+                                                "text-left p-4 rounded-lg border transition-all flex justify-between items-center group bg-card",
+                                                isSelected
+                                                    ? "border-primary bg-primary/5 shadow-[0_0_0_1px] shadow-primary"
+                                                    : "border-border hover:border-primary/50"
+                                            )}
+                                        >
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <h4 className={cn("font-bold transition-colors", isSelected ? 'text-primary' : 'text-foreground')}>{alt.name}</h4>
+                                                    {alt.name === controlAlt && <Badge variant="secondary">Control</Badge>}
+                                                </div>
+                                                <p className="text-muted-foreground text-sm line-clamp-1">{alt.description || "Experimental variation"}</p>
+                                            </div>
+                                            <div className={cn(
+                                                "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                                isSelected ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground"
+                                            )}>
+                                                {isSelected && <span className="text-[10px] font-black">✓</span>}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <ScenarioSelector
+                        scenarios={scenarios || []}
+                        selectedIds={selectedScenarios}
+                        onToggle={(id) => {
+                            if (selectedScenarios.includes(id)) {
+                                setSelectedScenarios(prev => prev.filter(s => s !== id));
+                            } else {
+                                setSelectedScenarios(prev => [...prev, id]);
+                            }
+                        }}
+                    />
+                </div>
+
+                {/* Right Column: Execution Parameters */}
+                <div className="md:col-span-4 space-y-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Runtime Params</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <Input label="Repetitions" type="number" value={reps} onChange={(e) => setReps(Number(e.target.value))} />
+                            <Input label="Max Concurrency" type="number" value={concurrent} onChange={(e) => setConcurrent(Number(e.target.value))} />
+                            <Input label="Timeout (e.g. 5m, 1h)" value={timeout} onChange={(e) => setTimeout(e.target.value)} />
+
+                            <div className="pt-4 border-t space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground font-bold text-xs uppercase tracking-tighter">Total Jobs</span>
+                                    <span className="text-xl font-black text-primary">{totalJobs}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground font-bold text-xs uppercase tracking-tighter">Estimated Duration</span>
+                                    <span className="font-mono text-foreground">~{estimatedTime}m</span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {Number(reps) < 5 && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg flex gap-3 text-amber-500">
+                            <span className="text-xl">⚠️</span>
+                            <div className="text-xs">
+                                <strong className="block font-bold mb-1">Low Statistical Power</strong>
+                                Sample size of {reps} is small. To detect meaningful differences (p &lt; 0.05) reliably, consider using at least 5-10 repetitions.
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        <Button type="submit" variant="default" size="lg" className="w-full" isLoading={loading} disabled={selectedScenarios.length === 0}>
+                            {selectedScenarios.length === 0 ? "Select a Scenario" : "Launch"}
+                        </Button>
+                        <Link href="/experiments" className="block w-full">
+                            <Button variant="ghost" className="w-full">
+                                Cancel
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </form>
+    );
+}

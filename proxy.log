@@ -1,0 +1,8 @@
+2026/02/01 02:06:59 Authorizing with Application Default Credentials
+2026/02/01 02:06:59 [daniela-genai-sandbox:us-central1:tenkai-db] Listening on 127.0.0.1:5432
+2026/02/01 02:06:59 The proxy has started successfully and is ready for new connections!
+2026/02/01 02:07:04 [daniela-genai-sandbox:us-central1:tenkai-db] Accepted connection from 127.0.0.1:56123
+2026/02/01 02:07:05 [daniela-genai-sandbox:us-central1:tenkai-db] client closed the connection
+2026/02/01 02:07:05 Sending SIGTERM signal for proxy to shutdown.
+2026/02/01 02:07:05 SIGTERM signal received. Shutting down...
+2026/02/01 02:07:05 proxy server error: accept tcp 127.0.0.1:5432: use of closed network connection

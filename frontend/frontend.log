@@ -1,0 +1,46 @@
+npm warn Unknown user config "always-auth" (//us-west1-npm.pkg.dev/gemini-code-dev/gemini-code/:always-auth). This will stop working in the next major version of npm.
+
+> tenkai-frontend@0.1.0 dev
+> next dev
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/petruzalek/projects/devrel-demos/agents/tenkai/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/petruzalek/projects/devrel-demos/agents/tenkai/frontend/package-lock.json
+
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://192.168.1.142:3000
+
+ ✓ Starting...
+ ✓ Ready in 363ms
+ GET /experiments/72 200 in 1500ms (compile: 1104ms, render: 396ms)
+ GET /experiments/72 200 in 214ms (compile: 3ms, render: 211ms)
+(node:5050) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET /experiments/72 200 in 91ms (compile: 3ms, render: 88ms)
+ GET /experiments/72 200 in 69ms (compile: 1208µs, render: 68ms)
+ GET / 200 in 308ms (compile: 212ms, render: 96ms)
+ GET /experiments/72 200 in 105ms (compile: 5ms, render: 100ms)
+ GET /experiments/72 200 in 72ms (compile: 1495µs, render: 71ms)
+ GET / 200 in 15ms (compile: 1290µs, render: 14ms)
+ GET /experiments/72 200 in 90ms (compile: 2ms, render: 87ms)
+ GET /experiments/72 200 in 70ms (compile: 1252µs, render: 69ms)
+ GET / 200 in 15ms (compile: 2ms, render: 13ms)
+ GET /experiments/72 200 in 92ms (compile: 4ms, render: 88ms)
+ GET /experiments/72 200 in 68ms (compile: 1365µs, render: 67ms)
+ GET / 200 in 13ms (compile: 1080µs, render: 12ms)
+ GET /experiments/72 200 in 100ms (compile: 5ms, render: 95ms)
+ GET /experiments/72 200 in 76ms (compile: 1557µs, render: 74ms)
+ GET / 200 in 28ms (compile: 7ms, render: 21ms)
+ GET /experiments/72 200 in 115ms (compile: 7ms, render: 108ms)
+ GET /experiments/72 200 in 80ms (compile: 1451µs, render: 78ms)
+ GET / 200 in 25ms (compile: 3ms, render: 23ms)
+ GET /experiments/72 200 in 111ms (compile: 7ms, render: 104ms)
+ GET /experiments/72 200 in 80ms (compile: 1221µs, render: 79ms)
+ GET / 200 in 30ms (compile: 7ms, render: 23ms)
+ GET /experiments/72 200 in 115ms (compile: 7ms, render: 108ms)
+ GET /experiments/72 200 in 80ms (compile: 1445µs, render: 78ms)
+ GET / 200 in 27ms (compile: 5ms, render: 21ms)

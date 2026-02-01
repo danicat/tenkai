@@ -1,0 +1,174 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-roboto-mono);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  /* Dark Mode Default (Aligned with previous "Dark" theme) */
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
+
+  --card: hsl(240 10% 4.5%);
+  /* Slightly lighter than bg */
+  --card-foreground: hsl(0 0% 98%);
+
+  --popover: hsl(240 10% 4.5%);
+  --popover-foreground: hsl(0 0% 98%);
+
+  --primary: hsl(243.4 75.4% 58.6%);
+  /* Indigo-500 */
+  --primary-foreground: hsl(0 0% 98%);
+
+  --secondary: hsl(240 3.7% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  /* Semantic Additions */
+  --success: hsl(142 70% 45%);
+  /* Emerald-500 equivalent */
+  --success-foreground: hsl(0 0% 98%);
+
+  --warning: hsl(38 92% 50%);
+  /* Amber-500 equivalent */
+  --warning-foreground: hsl(48 96% 89%);
+
+  --info: hsl(217 91% 60%);
+  /* Blue-500 equivalent */
+  --info-foreground: hsl(0 0% 98%);
+
+  --border: hsl(240 3.7% 15.9%);
+  --input: hsl(240 3.7% 15.9%);
+  --ring: hsl(240 4.9% 83.9%);
+
+  --radius: 0.5rem;
+}
+
+[data-theme='light'] {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+
+  --primary: hsl(243.4 75.4% 58.6%);
+  /* Indigo-500 */
+  --primary-foreground: hsl(0 0% 98%);
+
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  /* Semantic Additions (Light Mode) */
+  --success: hsl(142 76% 36%);
+  /* Emerald-600 */
+  --success-foreground: hsl(355 100% 97%);
+
+  --warning: hsl(38 92% 50%);
+  /* Amber-500 */
+  --warning-foreground: hsl(48 96% 89%);
+
+  --info: hsl(221 83% 53%);
+  /* Blue-600 */
+  --info-foreground: hsl(210 40% 98%);
+
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(240 5.9% 10%);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+    outline-color: var(--color-ring);
+  }
+}
+
+@layer utilities {
+  .text-title {
+    @apply text-2xl font-extrabold tracking-tight text-foreground;
+  }
+
+  .text-header {
+    @apply text-lg font-semibold tracking-tight text-foreground;
+  }
+
+  .text-body {
+    @apply text-sm font-normal text-muted-foreground;
+  }
+
+  .panel {
+    @apply rounded-lg border border-border bg-card text-card-foreground shadow-sm;
+  }
+}
